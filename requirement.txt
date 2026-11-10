@@ -1,1 +1,2 @@
 pygame-ce==2.5.8
+pytweening==1.2.0
