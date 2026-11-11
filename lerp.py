@@ -23,6 +23,8 @@ def processTransformationEvents(transformation_events: list[TransformationEvent]
         if processTransformationEvent(event, delta_time_s):
             transformation_events.remove(event)
 
+all_types = set()
+
 def processTransformationEvent(event: TransformationEvent, delta_time_s: float) -> bool:
     finished = False
 
@@ -33,7 +35,11 @@ def processTransformationEvent(event: TransformationEvent, delta_time_s: float) 
     t = event.elapsed / event.duration
 
     for f in fields(event.target_entity):
-        if f.type == "list[Entity]":
+        if f.type not in (
+                "int", "float",
+                "Point2f", "Point3f",
+                "Color",
+        ):
             continue
 
         value = lerp(
@@ -42,8 +48,10 @@ def processTransformationEvent(event: TransformationEvent, delta_time_s: float) 
             event.tween(t),
         )
 
-        if f.type == "Color":
-            value = tuple_cramp(value, 0, 255)
+        # @Note: Type specific adjustment.
+        match f.type:
+            case "Color":
+                value = tupleCramp(value, 0, 255)
 
         setattr(
             event.target_entity,
