@@ -55,19 +55,24 @@ class Text:
     pos: Point2f
     font: pygame.font.Font
     content: str
-    color: Color
+    color: Color = (255, 255, 255)
+    outline_color: Color = (0, 0, 0)
+    outline_width: int = 2
+    center: bool = False
 
 @dataclass
 class RectButton:
     pos: Point2f
     size: Point2f
     id: int
+    center: bool = False
 
 @dataclass
 class CircleButton:
     pos: Point2f
     radius: float
     id: int
+    center: bool = True
 
 @dataclass
 class Image:
@@ -76,6 +81,7 @@ class Image:
     image: pygame.Surface
     center: bool = False
     scroll_rate: Point2i = (0, 0)
+    visible: bool = True
 
 @dataclass
 class Animation:
@@ -94,6 +100,7 @@ class Container:
     pos: Point2f
     transformation: Point3f
     entities: list[Entity]
+    visible: bool = True
 
 Entity: TypeAlias = (
     Position2 | BackgroundColor | Line | Rect | Circle | Text | RectButton |

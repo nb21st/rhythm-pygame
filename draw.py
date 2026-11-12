@@ -24,13 +24,26 @@ def drawEntity(screen: Surface, e: entity.Entity, pos_offset=(0, 0), transformat
         case entity.Circle(pos=pos, radius=rad, color=col):
             draw.circle(screen, col, calcPos(pos), rad)
 
-        case entity.Text(pos=pos, font=f, content=text, color=col):
-            text_surface = f.render(text, False, col)
-            text_surface = transform.rotate(text_surface, transformation_offset[2])
-            text_rect = text_surface.get_rect(center=calcPos(pos))
-            screen.blit(text_surface, text_rect)
+        case entity.Text(pos=pos, font=f, content=text, color=col, outline_color=o_col, outline_width=o_w, center=center):
+            text_surface = f.render(text, True, col)
+            if o_w > 0:
+                f.outline = o_w
+                outline_text_surface = f.render(text, True, o_col)
+                outline_text_surface.blit(text_surface, (f.outline, f.outline))
+                text_surface = outline_text_surface
+                f.outline = 0
 
-        case entity.Image(pos=pos, transformation=transformation, image=surface, center=center, scroll_rate=scroll):
+            text_surface = transform.rotate(text_surface, transformation_offset[2])
+
+            if center:
+                text_rect = text_surface.get_rect(center=calcPos(pos))
+                screen.blit(text_surface, text_rect)
+            else:
+                screen.blit(text_surface, calcPos(pos))
+
+        case entity.Image(pos=pos, transformation=transformation, image=surface, center=center, scroll_rate=scroll, visible=visible):
+            if not visible:
+                return
             # @Bug, Todo: Where is delta time bro.
             surface.scroll(scroll[0], scroll[1], SCROLL_REPEAT)
             e.image = surface
@@ -68,5 +81,6 @@ def drawEntity(screen: Surface, e: entity.Entity, pos_offset=(0, 0), transformat
             e.frame_index = i
             e.excess_ms = ms_left
 
-        case entity.Container(pos=pos, transformation=transformation, entities=es):
-            drawEntities(screen, es, calcPos(pos), tupleAdd(transformation, transformation_offset))
+        case entity.Container(pos=pos, transformation=transformation, entities=es, visible=visible):
+            if visible:
+                drawEntities(screen, es, calcPos(pos), tupleAdd(transformation, transformation_offset))

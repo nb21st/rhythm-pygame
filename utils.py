@@ -12,10 +12,12 @@ SCREEN_WIDTH  = 1920
 SCREEN_HEIGHT = 1080
 SCREEN_SIZE   = (SCREEN_WIDTH, SCREEN_HEIGHT)
 MENU_FPS_LIMIT = 60
-GAMEPLAY_FPS_LIMIT = 0
+GAMEPLAY_FPS_LIMIT = 120
 
 # @Note: GLOBAL VARIABLES
+pygame.font.init()
 class DebugState:
+    font  = pygame.font.Font(None, 32)
     level = 0
     count = 4
 debug_state = DebugState()
@@ -47,8 +49,11 @@ def detectButtonCollisions(
     for e in es:
         match e:
             # @Note: Did not consider rotated rect.
-            case entity.RectButton(pos=pos, size=size, id=id):
-                rect = pygame.Rect(tupleAdd(pos, offset_pos), size)
+            case entity.RectButton(pos=pos, size=size, id=id, center=center):
+                rect_pos = tupleAdd(pos, offset_pos)
+                if center:
+                    rect_pos = tupleSub(rect_pos, tupleIDiv(size, (2, 2)))
+                rect = pygame.Rect(rect_pos, size)
                 if rect.collidepoint(mouse_pos):
                     button_hovers[id] = True
                     if pygame.mouse.get_just_pressed()[0]:
@@ -61,7 +66,8 @@ def detectButtonCollisions(
                     if pygame.mouse.get_just_pressed()[0]:
                         button_clicks[id] = True
 
-            case entity.Container(pos=pos, transformation=transformation, entities=fs):
+            case entity.Container(pos=pos, transformation=transformation, entities=fs, visible=visible):
+                if visible:
                     detectButtonCollisions(
                         button_clicks,
                         button_hovers,
@@ -72,7 +78,8 @@ def detectButtonCollisions(
 
 # @Note: `drawDebugInfo` also happens to tank the FPS because
 #        text rendering is expensive.
-def drawDebugInfo(screen, font, fps, quick_variables, bulk_variables):
+def drawDebugInfo(screen, fps, quick_variables, bulk_variables):
+    font = debug_state.font
     fps = fps or 1.0
     frametime = 1000 / fps
     quick_text = (f"{fps:.0f} FPS {frametime:.1f} MS\n" +

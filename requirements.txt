@@ -1,2 +1,6 @@
+bitarray==3.12.3
+mutagen==1.48.1
 pygame-ce==2.5.8
 pytweening==1.2.0
+snakeviz==2.2.2
+tornado==6.6.1

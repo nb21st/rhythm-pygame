@@ -11,13 +11,12 @@ import lerp
 import scenes.scenes as scenes
 from utils import *
 
-def mainMenu(screen):
+def mainMenu(screen, context):
     next_scene = None
-
-    debug_font = pygame.font.Font(None, 32)
 
     clock = pygame.time.Clock()
     running = True
+    big_font = pygame.font.Font(None, 128)
 
     class button_id(IntEnum):
         MAIN_MENU_NEXT       = 0
@@ -44,7 +43,7 @@ def mainMenu(screen):
                 entities = [
                     entity.CircleButton((0, 0), 256, id=button_id.MAIN_MENU_PLAY),
                     entity.Circle((0, 0), 256, DARK_BACKGROUND_COLOR),
-                    entity.Text((0, 0), pygame.font.Font(None, 128), "Play", (255, 255, 255))
+                    entity.Text((0, 0), big_font, "Play", outline_width=6, center=True)
                 ],
             ),
             entity.Container(
@@ -53,7 +52,7 @@ def mainMenu(screen):
                 entities = [
                     entity.CircleButton((0, 0), 256, id=button_id.MAIN_MENU_EDITOR),
                     entity.Circle((0, 0), 256, DARK_BACKGROUND_COLOR),
-                    entity.Text((0, 0), pygame.font.Font(None, 128), "Editor", (255, 255, 255))
+                    entity.Text((0, 0), big_font, "Editor", outline_width=6, center=True)
                 ],
             ),
             entity.Container(
@@ -62,7 +61,7 @@ def mainMenu(screen):
                 entities = [
                     entity.CircleButton((0, 0), 256, id=button_id.MAIN_MENU_SETTING),
                     entity.Circle((0, 0), 256, DARK_BACKGROUND_COLOR),
-                    entity.Text((0, 0), pygame.font.Font(None, 128), "Setting", (255, 255, 255)) 
+                    entity.Text((0, 0), big_font, "Setting", outline_width=6, center=True)
                 ],
             ),
             entity.Container(
@@ -71,12 +70,12 @@ def mainMenu(screen):
                 entities = [
                     entity.CircleButton((0, 0), 256, id=button_id.MAIN_MENU_EXIT),
                     entity.Circle((0, 0), 256, DARK_BACKGROUND_COLOR),
-                    entity.Text((0, 0), pygame.font.Font(None, 128), "Exit", (255, 255, 255))
+                    entity.Text((0, 0), big_font, "Exit", outline_width=6, center=True)
                 ],
             ),
         ],
     )
-    arrow_png = pygame.image.load("assets/ui/arrow.png", "arrow.png").convert_alpha()
+    arrow_png = pygame.image.load("assets/arrow.png", "arrow.png").convert_alpha()
     main_menu_next_arrow = entity.Container(
         pos = (SCREEN_WIDTH - 256, 512 - 128),
         transformation = (1, 1, 0),
@@ -105,6 +104,7 @@ def mainMenu(screen):
         ],
         center = True,
     )
+    transition = entity.Circle((SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2), 0, (0, 0, 0))
 
     entities: List[entity.Entity] = [
         outer_background,
@@ -114,6 +114,7 @@ def mainMenu(screen):
         main_menu_selection,
         main_menu_next_arrow,
         main_menu_prev_arrow,
+        transition,
     ]
 
     entities_text = "[\n"
@@ -230,15 +231,31 @@ def mainMenu(screen):
                 )
                 next_scene = scenes.chartSelection
                 pygame.time.set_timer(custom_event.QUIT_SCENE, 300, 1)
-            if button_clicks[button_id.MAIN_MENU_EXIT]:
-                pygame.event.post(pygame.QUIT)
+            elif button_clicks[button_id.MAIN_MENU_SETTING]:
+                next_scene = scenes.setting
+                pygame.event.post(pygame.event.Event(custom_event.QUIT_SCENE))
+            elif button_clicks[button_id.MAIN_MENU_EXIT]:
+                transformation_events.append(
+                    lerp.TransformationEvent(
+                        transition,
+                        copy(transition),
+                        entity.Circle(
+                            pos = transition.pos,
+                            radius = 1200,
+                            color = transition.color,
+                        ),
+                        pytweening.easeInExpo,
+                        0.8,
+                    )
+                )
+                pygame.time.set_timer(custom_event.QUIT_SCENE, 800, 1)
 
         lerp.processTransformationEvents(transformation_events, delta_time_s)
         drawEntities(screen, entities, (-camera_pos.x, -camera_pos.y))
 
         if debug_state.level >= 1:
             quick_debug_info = {}
-            bulk_debug_info = {}
+            bulk_debug_info  = {}
         if debug_state.level >= 2:
             quick_debug_info.update({
                 "camera pos": f"({camera_pos.x:.2f}, {camera_pos.y:.2f})",
@@ -250,8 +267,8 @@ def mainMenu(screen):
             })
 
         if debug_state.level >= 1:
-            drawDebugInfo(screen, debug_font, clock.get_fps(), quick_debug_info, bulk_debug_info)
+            drawDebugInfo(screen, clock.get_fps(), quick_debug_info, bulk_debug_info)
 
         pygame.display.flip()
 
-    return next_scene
+    return next_scene, None

@@ -7,11 +7,12 @@ from utils import *
 
 def main():
     pygame.init()
-    screen = pygame.display.set_mode(SCREEN_SIZE, pygame.FULLSCREEN)
+    screen     = pygame.display.set_mode(SCREEN_SIZE, pygame.FULLSCREEN)
     next_scene = scenes.mainMenu
+    context    = None
     while next_scene is not None:
         current_scene = next_scene
-        next_scene = current_scene(screen)
+        next_scene, context = current_scene(screen, context)
 
 if __name__ == "__main__":
     main()
