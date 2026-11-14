@@ -29,9 +29,13 @@ def setting(screen, context):
     # Load config
     config = data_io.read_data("data/config.txt")
 
-    class key_id(IntEnum): KEY1 = 0; KEY2 = auto(); KEY3 = auto(); KEY4 = auto()
+    class key_id(IntEnum):
+        KEY1 = 0
+        KEY2 = auto()
+        KEY3 = auto()
+        KEY4 = auto()
     key_labels = ["key1", "key2", "key3", "key4"]
-    keybinds   = [config[key] for key in key_labels]
+    keybinds = [config[key] for key in key_labels]
 
     waiting_for_key_id = None
 
@@ -39,17 +43,19 @@ def setting(screen, context):
     def create_key_binder(x, key_id, button):
         display_key = "___" if waiting_for_key_id == key_id else keybinds[key_id]
         return entity.Container(
-            pos=(x, 670),
-            transformation=(1, 1, 0),
-            entities=[
+            pos = (x, 670),
+            transformation = (1, 1, 0),
+            entities = [
                 entity.CircleButton((228, 228), 128, id=button),
                 entity.Rect((100, 100),(256, 256),DARK_BACKGROUND_COLOR),
-                entity.Text((228, 228),small_font,display_key,outline_width=6,center=True)])
+                entity.Text((228, 228),small_font,display_key,outline_width=6,center=True),
+            ]
+        )
 
     arrow_png = pygame.image.load("assets/arrow.png").convert_alpha()
     camera_pos = entity.Position2(0, 0)
     outer_background = entity.BackgroundColor(DARK_BACKGROUND_COLOR)
-    inner_background = entity.Rect((16, 16),(SCREEN_WIDTH - 32, SCREEN_HEIGHT - 32),LIGHT_BACKGROUND_COLOR)
+    inner_background = entity.Rect((16, 16),(SCREEN_WIDTH - 32, SCREEN_HEIGHT - 32), LIGHT_BACKGROUND_COLOR)
 
     pos1 = 420
     # Keybind buttons maker cus holyF### am too lazy to write that shit
@@ -58,12 +64,13 @@ def setting(screen, context):
     Key3_binder = create_key_binder(100 + pos1 * 2, key_id.KEY3, button_id.KEY3_KEYBIND)
     Key4_binder = create_key_binder(100 + pos1 * 3, key_id.KEY4, button_id.KEY4_KEYBIND)
     chart_selection_menu_back_arrow = entity.Container(
-        pos=(100, 100),
-        transformation=(1, 1, 0),
-        entities=[
+        pos = (100, 100),
+        transformation = (1, 1, 0),
+        entities = [
             entity.CircleButton((0, 0), 64,id=button_id.CHART_SELECTION_BACK),
-            entity.Image((0, 0),(0.6, 0.6, 90),arrow_png,True),],)
-
+            entity.Image((0, 0),(0.6, 0.6, 90),arrow_png,True),
+        ],
+    )
     entities = [
         outer_background,
         inner_background,
@@ -105,7 +112,6 @@ def setting(screen, context):
                             waiting_for_key_id = None
                         else:
                             new_key = pygame.key.name(event.key).upper()
-
                             existing_keys = [key.upper() for key in keybinds]
 
                             # Swap key if duplicated
@@ -115,10 +121,8 @@ def setting(screen, context):
                             keybinds[waiting_for_key_id] = new_key
 
                             # Save config
-                            config.update({key: val for key, val in zip(key_labels, keybinds)})
-
+                            config.update(dict(zip(key_labels, keybinds)))
                             data_io.write_data("data/config.txt", config)
-
                             waiting_for_key_id = None
 
 
@@ -164,9 +168,8 @@ def setting(screen, context):
                 "keybinds": keybinds,
             })
         if debug_state.level >= 1:
-            drawDebugInfo(screen,clock.get_fps(),quick_debug_info,bulk_debug_info)
+            drawDebugInfo(screen,clock.get_fps(), quick_debug_info,bulk_debug_info)
 
         pygame.display.flip()
 
     return next_scene, None
-
