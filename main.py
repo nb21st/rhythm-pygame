@@ -1,5 +1,9 @@
 # @Intro:
-#     Yeah, this is main.
+#     This is the entry point of the game. It starts with initializing the pygame library,
+#     assigns main menu function as the current scene, and loop back to the next scene if the
+#     current scene ended and returned the next scene. Otherwise, the game is ended.
+#     Although, the game typically ended with sys.exit().
+#
 
 import pygame
 import scenes.scenes as scenes
@@ -7,7 +11,7 @@ from utils import *
 
 def main():
     pygame.init()
-    screen     = pygame.display.set_mode(SCREEN_SIZE, pygame.FULLSCREEN)
+    screen     = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
     next_scene = scenes.mainMenu
     context    = None
     while next_scene is not None:

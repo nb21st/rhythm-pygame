@@ -1,4 +1,4 @@
-key1=d
-key2=f
-key3=j
-key4=k
+key1=D
+key2=F
+key3=J
+key4=K

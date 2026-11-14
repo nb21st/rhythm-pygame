@@ -1,8 +1,7 @@
 # @Intro:
-#     Collection of custom useful functions.
+#     Collection of contants, global variables, useful functions,
 #
 
-# @Note: CONSTANTS
 import pygame
 import entity
 
@@ -14,7 +13,6 @@ SCREEN_SIZE   = (SCREEN_WIDTH, SCREEN_HEIGHT)
 MENU_FPS_LIMIT = 60
 GAMEPLAY_FPS_LIMIT = 120
 
-# @Note: GLOBAL VARIABLES
 pygame.font.init()
 class DebugState:
     font  = pygame.font.Font(None, 32)
@@ -24,8 +22,6 @@ debug_state = DebugState()
 
 class custom_event:
     QUIT_SCENE = pygame.event.custom_type()
-
-def todo(msg=""): raise RuntimeError("@Todo: " + msg)
 
 # @Note: This function actually exists in pygame.math but this is more fun.
 def cramp(x, mn, mx): return min(max(x, mn), mx)

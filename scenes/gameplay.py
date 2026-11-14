@@ -61,12 +61,6 @@ HIT_OBJECT_COLORS = [ pygame.Color("tomato")
 
 HIT_LIGHTING_COLORS = JUDGEMENT_COLORS + HIT_OBJECT_COLORS
 
-SCREEN_WIDTH  = 1920
-SCREEN_HEIGHT = 1080
-FPS_LIMIT     = 0
-
-DEFAULT_BPM   = 100.0 / 3
-
 def gameplay(screen, context):
     next_scene = scenes.chartSelection
     beatmapset_filename, beatmap_filename, beatmap_id = context
@@ -79,8 +73,6 @@ def gameplay(screen, context):
 
     beatmaps_directory = "songs/"
 
-    bpm           = DEFAULT_BPM
-    bps           = bpm / 60
     hit_objects   = []
     total_notes   = 0
 
@@ -159,38 +151,30 @@ def gameplay(screen, context):
                  , KeyState.RELEASED
                  ]
 
-    def new_game(beatmapset_name, beatmap_name):
-        nonlocal song_filename, song_length, song_length_minutes, song_length_seconds
-        nonlocal bpm, bps, hit_objects, total_notes, time, counting_down
+    result = osu.load(beatmaps_directory, beatmapset_filename, beatmap_filename)
 
-        result = osu.load(beatmaps_directory, beatmapset_name, beatmap_name)
+    if result == None:
+        return None
 
-        if result == None:
-            return None
+    song_filename, bpm, hit_objects = result
+    bps = bpm / 60
+    total_notes = len(hit_objects) + sum(map(lambda x: x.end_time != 0, hit_objects))
 
-        song_filename, bpm, hit_objects = result
-        bps = bpm / 60
-        total_notes = len(hit_objects) + sum(map(lambda x: x.end_time != 0, hit_objects))
+    zf = zipfile.ZipFile(beatmaps_directory + '/' + beatmapset_filename, 'r')
+    f  = zf.open(song_filename)
 
-        zf = zipfile.ZipFile(beatmaps_directory + '/' + beatmapset_name, 'r')
-        f  = zf.open(song_filename)
+    if song_filename.endswith(".mp3"):
+        song_length = MP3(f).info.length
+    elif song_filename.endswith(".ogg"):
+        song_length = OggVorbis(f).info.length
 
-        if song_filename.endswith(".mp3"):
-            song_length = MP3(f).info.length
-        elif song_filename.endswith(".ogg"):
-            song_length = OggVorbis(f).info.length
-        else:
-            assert(False)
-        song_length_minutes = int(song_length) // 60
-        song_length_seconds = int(song_length) % 60
+    song_length_minutes = int(song_length) // 60
+    song_length_seconds = int(song_length) % 60
 
-        f.seek(0)
-        pygame.mixer.music.load(f)
+    pygame.mixer.music.load(f)
 
-        time = -2.0
-        counting_down = True
-
-    new_game(beatmapset_filename, beatmap_filename)
+    time = -2.0
+    counting_down = True
 
     while running:
         if counting_down and time >= 0.0:
@@ -220,6 +204,7 @@ def gameplay(screen, context):
 
                 case pygame.QUIT:
                     import sys
+                    pygame.quit()
                     sys.exit(0)
                 case custom_event.QUIT_SCENE:
                     running = False
@@ -380,11 +365,6 @@ def gameplay(screen, context):
             line_pos_y = ((HITBAR_Y - (HITBAR_Y / three) * i) + (time / 2 * bps) * (HITBAR_Y / three)) % HITBAR_Y
             pygame.draw.line(screen, pygame.Color("gray20"), (track_pos_x - (80 + 96), line_pos_y), (track_pos_x + (80 + 96), line_pos_y), 2)
 
-        pygame.draw.line(screen, pygame.Color("gray9"),  (track_pos_x - (80 + 96), HITBAR_Y - 1), (track_pos_x + (80 + 96), HITBAR_Y - 1), 64)
-        pygame.draw.line(screen, pygame.Color("gray20"), (track_pos_x - (80 + 96), HITBAR_Y - 1), (track_pos_x + (80 + 96), HITBAR_Y - 1),  2)
-        pygame.draw.line(screen, pygame.Color("white"),  (track_pos_x - (80 + 96),            0), (track_pos_x - (80 + 96), SCREEN_HEIGHT), 4)
-        pygame.draw.line(screen, pygame.Color("white"),  (track_pos_x + (80 + 96),            0), (track_pos_x + (80 + 96), SCREEN_HEIGHT), 4)
-
         for key, hit_lighting in filter(lambda xs: xs[1] is None, enumerate(hit_lightings)):
             pygame.draw.circle(
                 screen,
@@ -419,41 +399,22 @@ def gameplay(screen, context):
                     (track_pos_x + (hit_object.key - 1.5) * COLUMN_GAP - size, end_pos,
                      size * 2, height)
                 )
-                pygame.draw.circle(
-                    screen,
-                    pygame.Color("white"),
-                    (track_pos_x + (hit_object.key - 1.5) * COLUMN_GAP, pos - int(hit_object.end_time * SPEED)),
-                    size,
-                )
-                pygame.draw.circle(
-                    screen,
-                    primary_color,
-                    (track_pos_x + (hit_object.key - 1.5) * COLUMN_GAP, pos - int(hit_object.end_time * SPEED)),
-                    size // 16 * 15,
-                )
-            else:
-                pygame.draw.circle(
-                    screen,
-                    primary_color,
-                    (track_pos_x + (hit_object.key - 1.5) * COLUMN_GAP, pos - int(hit_object.end_time * SPEED)),
-                    size,
-                )
+
+            pygame.draw.circle(
+                screen,
+                primary_color,
+                (track_pos_x + (hit_object.key - 1.5) * COLUMN_GAP, pos - int(hit_object.end_time * SPEED)),
+                size,
+            )
 
             if not is_long_note or (pos > HITBAR_Y and keys_state[hit_object.key] == KeyState.PRESSED):
                 continue
 
             pygame.draw.circle(
                 screen,
-                pygame.Color("white"),
-                (track_pos_x + (hit_object.key - 1.5) * COLUMN_GAP, pos),
-                size,
-            )
-            
-            pygame.draw.circle(
-                screen,
                 primary_color,
                 (track_pos_x + (hit_object.key - 1.5) * COLUMN_GAP, pos),
-                size // 16 * 15,
+                size,
             )
 
         for key, hit_lighting in filter(lambda xs: xs[1] is not None, enumerate(hit_lightings)):
@@ -510,28 +471,29 @@ def gameplay(screen, context):
 
         pygame.draw.line(screen, "red", (SCREEN_WIDTH // 2 + 220, SCREEN_HEIGHT // 2 + 400), (SCREEN_WIDTH // 2 + 220, SCREEN_HEIGHT // 2 + 400 * ((100 - health) / 100)), 32)
 
-        time_minutes = math.trunc(time / 60)
-        time_seconds = math.floor(math.fmod(time, 60))
-
-        if song_length > 0.00:
-            auto_text     = big_font.render("AUTO", True, pygame.Color("yellow"))
-            score_text    = big_font.render(f'{score:.0f}', True, pygame.Color("white"))
-            combo_text    = big_font.render(f'{combo}x', True, pygame.Color("white"))
-            accuracy_text = small_font.render(f'{accuracy * 100:.2f}%', True, pygame.Color("white"))
-            time_text     = small_font.render(f'{time_minutes}:{time_seconds:02}/{song_length_minutes}:{song_length_seconds:02} ({time / song_length * 100:.0f}%)'
-                                              , True, pygame.Color("white"))
-
-            screen.blit(score_text,    (track_pos_x + 200, SCREEN_HEIGHT - 128 + 00))
-            screen.blit(combo_text,    (track_pos_x + 200, SCREEN_HEIGHT - 128 + 48))
-            screen.blit(accuracy_text, (track_pos_x + 200, SCREEN_HEIGHT - 128 + 96))
-            screen.blit(time_text,     (8, SCREEN_HEIGHT - 32))
-            if auto: screen.blit(auto_text, (SCREEN_WIDTH - 134, SCREEN_HEIGHT - 48))
-
-            pygame.draw.rect(screen, pygame.Color("yellow"), (0, SCREEN_HEIGHT - 4, int(SCREEN_WIDTH * (time / song_length)), 4))
+        cramped_time  = cramp(time, 0, song_length)
+        cramped_time_minutes = math.trunc(cramped_time / 60)
+        cramped_time_seconds = math.floor(math.fmod(cramped_time, 60))
+        auto_text     = big_font.render("AUTO", True, pygame.Color("yellow"))
+        score_text    = big_font.render(f'{score:.0f}', True, pygame.Color("white"))
+        combo_text    = big_font.render(f'{combo}x', True, pygame.Color("white"))
+        accuracy_text = small_font.render(f'{accuracy * 100:.2f}%', True, pygame.Color("white"))
+        time_percent  = cramped_time / song_length * 100
+        time_text     = small_font.render(
+            f'{cramped_time_minutes}:{cramped_time_seconds:02}/{song_length_minutes}:{song_length_seconds:02} ({time_percent:.0f}%)',
+            True,
+            pygame.Color("white"),
+        )
+        screen.blit(score_text,    (track_pos_x + 200, SCREEN_HEIGHT - 128 + 00))
+        screen.blit(combo_text,    (track_pos_x + 200, SCREEN_HEIGHT - 128 + 48))
+        screen.blit(accuracy_text, (track_pos_x + 200, SCREEN_HEIGHT - 128 + 96))
+        screen.blit(time_text,     (8, SCREEN_HEIGHT - 32))
+        if auto: screen.blit(auto_text, (SCREEN_WIDTH - 134, SCREEN_HEIGHT - 48))
+        pygame.draw.rect(screen, pygame.Color("yellow"), (0, SCREEN_HEIGHT - 4, int(SCREEN_WIDTH * (time / song_length)), 4))
 
         pygame.display.flip()
 
-        dt = clock.tick(FPS_LIMIT) / 1000
+        dt = clock.tick(GAMEPLAY_FPS_LIMIT) / 1000
         if pygame.mixer.music.get_busy() and not rewinding:
             time = music_time_base + (pygame.mixer.music.get_pos() - music_pos_base) / 1000
         else:
