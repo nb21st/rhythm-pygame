@@ -96,11 +96,12 @@ def gameplay(screen, context):
     music_time_base = 0.0
     music_pos_base  = 0
 
-    HITBAR_Y      = SCREEN_HEIGHT // 10 * 9
-    COLUMN_GAP    = 80
+    HITBAR_Y          = SCREEN_HEIGHT // 10 * 9
+    HIT_OBJECT_RADIUS = 48
+    COLUMN_GAP        = HIT_OBJECT_RADIUS * 2 + 16
 
     hit_lightings       = [None, None, None, None]
-    judgement_feedback  = None
+    judgement_feedback  = HitLighting(None, 0.0)
 
     small_font = pygame.font.SysFont("Liberation Sans", 16)
     big_font   = pygame.font.Font(None, 64)
@@ -184,13 +185,15 @@ def gameplay(screen, context):
     time = -2.0
     counting_down = True
 
-    camera_pos = entity.Position2(0, 0)
+    camera_pos = entity.Position3(0, 0, 1)
     background = entity.Image(
         pos = (0, 0),
         transformation = (1, 1, 0),
         image = pygame.image.load("assets/background.png").convert(),
     )
+    
     transition = entity.Circle((SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2), 1100, (0, 0, 0))
+    
     game = entity.Image(
         pos = (0, 0),
         transformation = (1, 1, 0),
@@ -198,19 +201,27 @@ def gameplay(screen, context):
     )
 
     auto_text = entity.Text((SCREEN_WIDTH - 134, SCREEN_HEIGHT - 48), big_font, "")
-    score_text = entity.Text((track_pos_x + 200, SCREEN_HEIGHT - 128 + 00), big_font, "")
-    combo_text = entity.Text((track_pos_x + 200, SCREEN_HEIGHT - 128 + 48), big_font, "")
-    accuracy_text = entity.Text((track_pos_x + 200, SCREEN_HEIGHT - 128 + 96), small_font, "")
+    score_text = entity.Text((track_pos_x + 220, SCREEN_HEIGHT - 128 + 00), big_font, "")
+    combo_text = entity.Text((track_pos_x + 220, SCREEN_HEIGHT - 128 + 48), big_font, "")
+    accuracy_text = entity.Text((track_pos_x + 220, SCREEN_HEIGHT - 128 + 96), small_font, "")
     time_text = entity.Text((8, SCREEN_HEIGHT - 32), small_font, "")
-    entities: List[entity.Entity] = [
+    combo_feedback_text = entity.Text((track_pos_x, SCREEN_HEIGHT // 2), big_font, "", center=True)
+    grade_feedback_text = entity.Text((track_pos_x, SCREEN_HEIGHT // 2 - 48), big_font, "", center=True)
+
+    art_entities: List[entity.Entity] = [
         background,
+    ]
+
+    game_entities: List[entity.Entity] = [
         game,
         auto_text,
         score_text,
         combo_text,
         accuracy_text,
         time_text,
-    transition,
+        grade_feedback_text,
+        combo_feedback_text,
+        transition,
     ]
 
     transformation_events: List[lerp.TransformationEvent] = [
@@ -315,6 +326,7 @@ def gameplay(screen, context):
         keys_state = [KEY_STATE_TABLE[press][state] for press, state in zip(pressed_keys, keys_state)]
 
         sawtooth_visual_wave = ((1/bps) - (time / 2) % (1/bps)) / (1/bps)
+        camera_pos.z = 1.0 + pytweening.easeInCirc(sawtooth_visual_wave) / 20
 
         for key, key_state in enumerate(keys_state):
             if ((key_state == KeyState.PRESSED or key_state == KeyState.JUST_PRESSED) and
@@ -404,7 +416,7 @@ def gameplay(screen, context):
         sawtooth_color_light   = pygame.Color((255, 255, 255))
         sawtooth_color_dark    = pygame.Color((255, 255, 255))
         sawtooth_color_light.a = 100 + int(sawtooth_visual_wave * 155)
-        sawtooth_color_dark.a  = int(sawtooth_visual_wave * 30)
+        sawtooth_color_dark.a  = 55 + int(sawtooth_visual_wave * 35r)
         sawtooth_color_light   = sawtooth_color_light.premul_alpha()
         sawtooth_color_dark    = sawtooth_color_dark.premul_alpha()
         sawtooth_color_light.a = 255
@@ -413,36 +425,35 @@ def gameplay(screen, context):
         pygame.draw.rect(
             game.image,
             pygame.Color((0, 0, 0, 200)),
-            (track_pos_x - (80 + 96), 0, (80 + 96) * 2, SCREEN_HEIGHT)
+            (track_pos_x + -1.5 * COLUMN_GAP - HIT_OBJECT_RADIUS - 8, 0, 3 * COLUMN_GAP + 2 * HIT_OBJECT_RADIUS + 16, SCREEN_HEIGHT),
         )
 
         for column_track_i in range(4):
             pygame.draw.rect(
                 game.image,
                 pygame.Color((0, 0, 0)),
-                (track_pos_x + (column_track_i - 1.5) * COLUMN_GAP - 32, 0, 64, HITBAR_Y),
+                (track_pos_x + (column_track_i - 1.5) * COLUMN_GAP - HIT_OBJECT_RADIUS, 0, (HIT_OBJECT_RADIUS * 2), HITBAR_Y),
             )
 
         # @Note: Draw BPM guide lines.
-        for i in range(3):
-            three = 1
-            line_pos_y = ((HITBAR_Y - (HITBAR_Y / three) * i) + (time / 2 * bps) * (HITBAR_Y / three)) % HITBAR_Y
-            pygame.draw.line(game.image, pygame.Color("gray20"), (track_pos_x - (80 + 96), line_pos_y), (track_pos_x + (80 + 96), line_pos_y), 2)
+        bpm_line_pos_y = ((HITBAR_Y - (HITBAR_Y)) + (time / 2 * bps) * (HITBAR_Y)) % HITBAR_Y
+        bpm_line_pos_x_start = track_pos_x + -1.5 * COLUMN_GAP - HIT_OBJECT_RADIUS - 8
+        bpm_line_pos_x_end   = bpm_line_pos_x_start + 3 * COLUMN_GAP + 2 * HIT_OBJECT_RADIUS + 16
+        pygame.draw.line(game.image, pygame.Color("gray20"), (bpm_line_pos_x_start, bpm_line_pos_y), (bpm_line_pos_x_end, bpm_line_pos_y), 16)
 
         for key, hit_lighting in filter(lambda xs: xs[1] is None, enumerate(hit_lightings)):
             pygame.draw.circle(
                 game.image,
                 pygame.Color("black"),
                 (track_pos_x + (key - 1.5) * COLUMN_GAP, HITBAR_Y),
-                32,
+                HIT_OBJECT_RADIUS,
             )
 
         for hit_object in hit_objects:
-            SPEED = 1400
-            size  = 32 # @Note: Radius
+            SPEED = 1800
             pos   = HITBAR_Y - (hit_object.timestamp - time) * SPEED
 
-            if pos < -32:
+            if pos < -HIT_OBJECT_RADIUS:
                 break
 
             primary_color     = HIT_OBJECT_COLORS[hit_object.key]
@@ -458,15 +469,15 @@ def gameplay(screen, context):
                 pygame.draw.rect(
                     game.image,
                     secondary_color,
-                    (track_pos_x + (hit_object.key - 1.5) * COLUMN_GAP - size, end_pos,
-                     size * 2, height)
+                    (track_pos_x + (hit_object.key - 1.5) * COLUMN_GAP - HIT_OBJECT_RADIUS, end_pos,
+                     HIT_OBJECT_RADIUS * 2, height)
                 )
 
             pygame.draw.circle(
                 game.image,
                 primary_color,
                 (track_pos_x + (hit_object.key - 1.5) * COLUMN_GAP, pos - int(hit_object.end_time * SPEED)),
-                size,
+                HIT_OBJECT_RADIUS,
             )
 
             if not is_long_note or (pos > HITBAR_Y and keys_state[hit_object.key] == KeyState.PRESSED):
@@ -476,7 +487,7 @@ def gameplay(screen, context):
                 game.image,
                 primary_color,
                 (track_pos_x + (hit_object.key - 1.5) * COLUMN_GAP, pos),
-                size,
+                HIT_OBJECT_RADIUS,
             )
 
         for key, hit_lighting in filter(lambda xs: xs[1] is not None, enumerate(hit_lightings)):
@@ -487,7 +498,7 @@ def gameplay(screen, context):
                 game.image,
                 color,
                 (track_pos_x + (key - 1.5) * COLUMN_GAP, HITBAR_Y),
-                32,
+                HIT_OBJECT_RADIUS,
             )
             hit_lighting.lifetime -= delta_time_s * 3 * (1 + 2 * (hit_lighting.grade == Judgement.NONE))
             if hit_lighting.lifetime <= 0.0:
@@ -496,41 +507,24 @@ def gameplay(screen, context):
         for key_guide_x in [0, 1, 2, 3]:
             pygame.draw.circle(
                 game.image,
-                sawtooth_color_light,
+                sawtooth_color_dark,
                 (track_pos_x + (key_guide_x - 1.5) * COLUMN_GAP, HITBAR_Y),
-                8,
+                HIT_OBJECT_RADIUS + 4,
+                4,
             )
 
-        if judgement_feedback is not None:
-            judgement_feedback.lifetime -= delta_time_s * 3 * (1 + 2 * (judgement_feedback.grade == Judgement.NONE))
+        judgement_feedback.lifetime -= delta_time_s * 3 * (1 + 2 * (judgement_feedback.grade == Judgement.NONE))
 
-            if judgement_feedback.lifetime <= 0.0:
-                judgement_feedback = None
-            else:
-                text = judgement_text[judgement_feedback.grade]
-                combo_feedback_text = str(combo)
-                feedback_surface = big_font.render(text, True, JUDGEMENT_COLORS[judgement_feedback.grade])
-                feedback_surface_rect = feedback_surface.get_rect(center=(track_pos_x, SCREEN_HEIGHT // 2 - 48))
-                big_font.outline = 2
-                outline_surface = big_font.render(text, True, (0, 0, 0))
-                outline_surface.blit(feedback_surface, (2, 2))
-                feedback_surface = outline_surface
-                big_font.outline = 0
+        if judgement_feedback.lifetime <= 0.0:
+            grade_feedback_text.content = ""
+            combo_feedback_text.content = ""
+        else:
+            grade_feedback_text.color   = JUDGEMENT_COLORS[judgement_feedback.grade]
+            grade_feedback_text.content = judgement_text[judgement_feedback.grade]
+            combo_feedback_text.content = str(combo)
 
-                combo_feedback_surface = big_font.render(combo_feedback_text, True, (255, 255, 255))
-                combo_feedback_surface_rect = combo_feedback_surface.get_rect(center=(track_pos_x, SCREEN_HEIGHT // 2))
-                big_font.outline = 2
-                combo_outline_surface = big_font.render(combo_feedback_text, True, (0, 0, 0))
-                combo_outline_surface.blit(combo_feedback_surface, (2, 2))
-                combo_feedback_surface = combo_outline_surface
-                big_font.outline = 0
-    
-                game.image.blit(feedback_surface, feedback_surface_rect)
-                game.image.blit(combo_feedback_surface, combo_feedback_surface_rect)
-
-
-        pygame.draw.line(game.image, (0, 0, 0),   (track_pos_x + 220, SCREEN_HEIGHT // 2 + 400), (track_pos_x + 220, SCREEN_HEIGHT // 2), 32)
-        pygame.draw.line(game.image, (200, 0, 0), (track_pos_x + 220, SCREEN_HEIGHT // 2 + 398), (track_pos_x + 220, SCREEN_HEIGHT // 2 + 2 + 400 * ((100 - health) / 100)), 28)
+        pygame.draw.line(game.image, (0, 0, 0),   (track_pos_x + 240, SCREEN_HEIGHT // 2 + 400), (track_pos_x + 240, SCREEN_HEIGHT // 2), 32)
+        pygame.draw.line(game.image, (200, 0, 0), (track_pos_x + 240, SCREEN_HEIGHT // 2 + 398), (track_pos_x + 240, SCREEN_HEIGHT // 2 + 2 + 400 * ((100 - health) / 100)), 28)
 
         cramped_time  = cramp(time, 0, song_length)
         cramped_time_minutes = math.trunc(cramped_time / 60)
@@ -543,10 +537,13 @@ def gameplay(screen, context):
         time_text.content     = f'{cramped_time_minutes}:{cramped_time_seconds:02}/{song_length_minutes}:{song_length_seconds:02} ({cramped_time / song_length * 100:.0f}%)'
         auto_text.content     = "AUTO" * auto # @Note: It's funny
             
-        pygame.draw.rect(game.image, pygame.Color("yellow"), (0, SCREEN_HEIGHT - 4, int(SCREEN_WIDTH * (time / song_length)), 4))
+        pygame.draw.rect(game.image, (0, 0, 0), (0, SCREEN_HEIGHT - 4, SCREEN_WIDTH, 4))
+        pygame.draw.rect(game.image, (255, 255, 0), (0, SCREEN_HEIGHT - 4, int(SCREEN_WIDTH * (time / song_length)), 4))
 
         lerp.processTransformationEvents(transformation_events, delta_time_s)
-        drawEntities(screen, entities, (-camera_pos.x, -camera_pos.y))
+        cam_pos, cam_tf = cameraTransform(camera_pos.x, camera_pos.y, camera_pos.z)
+        drawEntities(screen, art_entities, cam_pos, cam_tf)
+        drawEntities(screen, game_entities)
 
         if debug_state.level >= 1:
             quick_debug_info = {}
@@ -556,11 +553,9 @@ def gameplay(screen, context):
                 "camera pos": (f"({camera_pos.x:.2f}, {camera_pos.y:.2f})"),
             })
         if debug_state.level >= 3:
-            bulk_debug_info.update({
-                "entities": entities_text,
-            })
+            pass
         if debug_state.level >= 1:
-            drawDebugInfo(screen, clock.get_fps(), quick_debug_info,bulk_debug_info)
+            drawDebugInfo(screen, clock.get_fps(), quick_debug_info, bulk_debug_info)
 
         pygame.display.flip()
 

@@ -13,6 +13,9 @@
 #       * Entities whose bounding box is fully off screen are skipped before any
 #         transformation happens.
 #       * Rendered text is kept in a small LRU keyed by (font, text, colors, outline).
+#     Container offsets are (scale_x, scale_y, angle): scales multiply down the tree,
+#     angles add, and everything inside a container is scaled by it (positions, sizes,
+#     radii, sprites, text). The root offset is IDENTITY_OFFSET = (1, 1, 0).
 #     Change detection happens here, at draw time, so it doesn't matter who
 #     modified the entity (lerp, gameplay code, ...). No call site has to know.
 
@@ -104,6 +107,10 @@ def invalidateTransformCache(e) -> None:
     if hasattr(e, "_cache"):
         e._cache.source = None
 
+@lru_cache(maxsize=256)
+def _scaledText(font, text, color, outline_color, outline_width, sx, sy) -> Surface:
+    return transform.scale_by(_renderText(font, text, color, outline_color, outline_width), (sx, sy))
+
 @lru_cache(maxsize=512)
 def _renderText(font, text, color, outline_color, outline_width) -> Surface:
     surface = font.render(text, True, color)
@@ -115,26 +122,31 @@ def _renderText(font, text, color, outline_color, outline_width) -> Surface:
         surface = outlined
     return surface  # shared between callers: blit it, never draw on it
 
-def drawEntities(screen: Surface, entities: list[entity.Entity], pos_offset=(0, 0), transformation_offset=(0, 0, 0)):
+def drawEntities(screen: Surface, entities: list[entity.Entity], pos_offset=(0, 0), transformation_offset=IDENTITY_OFFSET):
     for e in entities:
         drawEntity(screen, e, pos_offset, transformation_offset)
 
-def drawEntity(screen: Surface, e: entity.Entity, pos_offset=(0, 0), transformation_offset=(1, 1, 0)):
-    def calcPos(pos): return tupleAdd(tuple(Vector2(pos).rotate(transformation_offset[2])), pos_offset)
+def drawEntity(screen: Surface, e: entity.Entity, pos_offset=(0, 0), transformation_offset=IDENTITY_OFFSET):
+    osx, osy, oangle = transformation_offset
+    def calcPos(pos): return toParentSpace(pos, pos_offset, transformation_offset)
     match e:
         case entity.BackgroundColor(color=col):
             screen.fill(col)
 
         case entity.Rect(pos=pos, size=size, color=col):
-            draw.rect(screen, col, (calcPos(pos), size))
+            draw.rect(screen, col, (calcPos(pos), (size[0] * osx, size[1] * osy)))
 
         case entity.Circle(pos=pos, radius=rad, color=col):
-            draw.circle(screen, col, calcPos(pos), rad)
+            draw.circle(screen, col, calcPos(pos), rad * (abs(osx) + abs(osy)) / 2)
 
         case entity.Text(pos=pos, font=f, content=text, color=col, outline_color=o_col, outline_width=o_w, center=center):
-            text_surface = _renderText(f, text, tuple(col), tuple(o_col), o_w)
+            if _isUnitScale(osx) and _isUnitScale(osy):
+                text_surface = _renderText(f, text, tuple(col), tuple(o_col), o_w)
+            else:
+                text_surface = _scaledText(f, text, tuple(col), tuple(o_col), o_w,
+                                           _quant(osx, SCALE_STEP), _quant(osy, SCALE_STEP))
 
-            angle = -transformation_offset[2]
+            angle = -oangle
             if not _isZeroAngle(angle):
                 text_surface = transform.rotate(text_surface, angle)
 
@@ -148,8 +160,8 @@ def drawEntity(screen: Surface, e: entity.Entity, pos_offset=(0, 0), transformat
             if not visible:
                 return
 
-            key = _transformKey(transformation[0], transformation[1],
-                                transformation[2] - transformation_offset[2])
+            key = _transformKey(transformation[0] * osx, transformation[1] * osy,
+                                transformation[2] - oangle)
             draw_pos = calcPos(pos)
             if _offscreen(screen, draw_pos, surface.get_size(), key):
                 return
@@ -202,7 +214,7 @@ def drawEntity(screen: Surface, e: entity.Entity, pos_offset=(0, 0), transformat
             e.excess_ms = ms_left
 
             # @Bug?: unlike Image, this ignores transformation_offset[2]. Kept as-is.
-            key = _transformKey(transformation[0], transformation[1], transformation[2])
+            key = _transformKey(transformation[0] * osx, transformation[1] * osy, transformation[2])
             draw_pos = calcPos(pos)
             if _offscreen(screen, draw_pos, animation[i].get_size(), key):
                 return
@@ -215,4 +227,4 @@ def drawEntity(screen: Surface, e: entity.Entity, pos_offset=(0, 0), transformat
 
         case entity.Container(pos=pos, transformation=transformation, entities=es, visible=visible):
             if visible:
-                drawEntities(screen, es, calcPos(pos), tupleAdd(transformation, transformation_offset))
+                drawEntities(screen, es, calcPos(pos), composeTransformation(transformation_offset, transformation))

@@ -37,16 +37,45 @@ def tupleFDiv(xs, ys):      return tupleOp(xs, ys, operator.truediv)
 def tupleIDiv(xs, ys):      return tupleOp(xs, ys, operator.floordiv)
 def tupleCramp(xs, mn, mx): return tuple(cramp(x, mn, mx) for x in xs)
 
+# @Note: Container transformation offsets are (scale_x, scale_y, angle_degrees).
+#        The root offset is IDENTITY_OFFSET. Scales multiply down the tree, angles add.
+IDENTITY_OFFSET = (1, 1, 0)
+
+def composeTransformation(offset, t):
+    return (offset[0] * t[0], offset[1] * t[1], offset[2] + t[2])
+
+# @Note: Local position of a child -> position in the parent's space: scale, then rotate,
+#        then translate. (Exact for uniform scale; with non-uniform scale inside rotated
+#        containers it is an approximation, since there is no shear.)
+def toParentSpace(pos, pos_offset, transformation_offset):
+    sx, sy, angle = transformation_offset
+    p = pygame.Vector2(pos[0] * sx, pos[1] * sy).rotate(angle)
+    return (p.x + pos_offset[0], p.y + pos_offset[1])
+
+# @Note: Camera zoom about the screen center. `camera_x/y` is the world position at the
+#        screen's top-left when zoom == 1 (same meaning as before). Use the SAME returned
+#        values for drawing and for hit-testing:
+#            cam_pos, cam_tf = cameraTransform(camera.x, camera.y, camera.z)
+#            detectButtonCollisions(clicks, hovers, entities, mouse_pos, cam_pos, cam_tf)
+#            drawEntities(screen, entities, cam_pos, cam_tf)
+def cameraTransform(camera_x, camera_y, zoom, screen_size=SCREEN_SIZE):
+    cx, cy = screen_size[0] / 2, screen_size[1] / 2
+    return ((-camera_x * zoom + cx * (1 - zoom),
+             -camera_y * zoom + cy * (1 - zoom)),
+            (zoom, zoom, 0))
+
 def detectButtonCollisions(
     button_clicks, button_hovers, es, mouse_pos, offset_pos=(0, 0),
-    transformation_offset=(1, 1, 0)
+    transformation_offset=IDENTITY_OFFSET
 ):
+    osx, osy, _ = transformation_offset
 
     for e in es:
         match e:
             # @Note: Did not consider rotated rect.
             case entity.RectButton(pos=pos, size=size, id=id, center=center):
-                rect_pos = tupleAdd(pos, offset_pos)
+                size = (size[0] * osx, size[1] * osy)
+                rect_pos = tupleAdd((pos[0] * osx, pos[1] * osy), offset_pos)
                 if center:
                     rect_pos = tupleSub(rect_pos, tupleIDiv(size, (2, 2)))
                 rect = pygame.Rect(rect_pos, size)
@@ -56,8 +85,8 @@ def detectButtonCollisions(
                         button_clicks[id] = True
 
             case entity.CircleButton(pos=pos, radius=rad, id=id):
-                if (pygame.Vector2(pos).rotate(transformation_offset[2]) +
-                    offset_pos).distance_to(mouse_pos) <= rad:
+                rad = rad * (abs(osx) + abs(osy)) / 2
+                if pygame.Vector2(toParentSpace(pos, offset_pos, transformation_offset)).distance_to(mouse_pos) <= rad:
                     button_hovers[id] = True
                     if pygame.mouse.get_just_pressed()[0]:
                         button_clicks[id] = True
@@ -68,8 +97,8 @@ def detectButtonCollisions(
                         button_clicks,
                         button_hovers,
                         fs, mouse_pos,
-                        pygame.Vector2(pos).rotate(transformation_offset[2]) + offset_pos,
-                        transformation + transformation_offset
+                        toParentSpace(pos, offset_pos, transformation_offset),
+                        composeTransformation(transformation_offset, transformation)
                     )
 
 # @Note: `drawDebugInfo` also happens to tank the FPS because

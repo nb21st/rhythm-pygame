@@ -24,8 +24,14 @@ Millisecond: TypeAlias = int
 
 @dataclass
 class Position2:
-    x: float
-    y: float
+    x: float = 0.0
+    y: float = 0.0
+
+@dataclass
+class Position3:
+    x: float = 0.0
+    y: float = 0.0
+    z: float = 0.0
 
 @dataclass
 class BackgroundColor:
