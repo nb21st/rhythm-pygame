@@ -5,8 +5,13 @@
 #     Surface transformations (scale/rotate) and text rendering are the expensive
 #     parts, so nothing here redoes them unless its inputs actually changed:
 #       * Identity transforms (scale 1, angle 0) are skipped entirely.
-#       * Image / Animation remember their last transformed surface in
-#         `entity._cache` and reuse it while (source, scale, angle) are unchanged.
+#       * Image / Animation keep a two-stage cache in `entity._cache`:
+#         scaled surface (keyed by scale) and rotated surface (keyed by scale+angle).
+#         A spinning sprite therefore re-rotates but never re-scales.
+#       * Scrolling images are never modified in place: the scale result is cached
+#         and the wrap-around is done with up to 4 area-blits.
+#       * Entities whose bounding box is fully off screen are skipped before any
+#         transformation happens.
 #       * Rendered text is kept in a small LRU keyed by (font, text, colors, outline).
 #     Change detection happens here, at draw time, so it doesn't matter who
 #     modified the entity (lerp, gameplay code, ...). No call site has to know.
@@ -33,41 +38,71 @@ def _isZeroAngle(a): return abs((a + 180.0) % 360.0 - 180.0) < _EPS_ANGLE
 def _transformKey(sx, sy, angle):
     return (_quant(sx, SCALE_STEP), _quant(sy, SCALE_STEP), _quant(angle, ANGLE_STEP))
 
-def _applyTransform(surface: Surface, key) -> Surface:
-    """scale then rotate, skipping whichever step is a no-op.
-    Returns `surface` itself (no copy) when the whole transform is the identity."""
-    sx, sy, angle = key
-    if not (_isUnitScale(sx) and _isUnitScale(sy)):
-        surface = transform.scale_by(surface, (sx, sy))
-    if not _isZeroAngle(angle):
-        surface = transform.rotate(surface, angle)
-    return surface
+def _scale(surface: Surface, key) -> Surface:
+    sx, sy = key[0], key[1]
+    if _isUnitScale(sx) and _isUnitScale(sy):
+        return surface
+    return transform.scale_by(surface, (sx, sy))
 
-def _imageSurface(e: entity.Image, surface: Surface, key, animated_pixels: bool) -> Surface:
-    if animated_pixels:
-        # Pixels change every frame (scrolling), so a cache would go stale.
-        return _applyTransform(surface, key)
-    c = e._cache
-    if c.source is not surface or c.key != key:
-        c.source, c.key = surface, key
-        c.surface = _applyTransform(surface, key)
+def _rotate(surface: Surface, key) -> Surface:
+    if _isZeroAngle(key[2]):
+        return surface
+    return transform.rotate(surface, key[2])
+
+def _offscreen(screen: Surface, pos, size, key) -> bool:
+    """Conservative bounding-box test, done before any surface work.
+    d is the diagonal of the scaled sprite, which bounds the rotated sprite
+    whichever corner/center it is anchored at."""
+    d = (((size[0] * key[0]) ** 2 + (size[1] * key[1]) ** 2) ** 0.5)
+    return (pos[0] + d < 0 or pos[0] - d > screen.get_width() or
+            pos[1] + d < 0 or pos[1] - d > screen.get_height())
+
+def _scaledImage(c, surface: Surface, key) -> Surface:
+    sk = (key[0], key[1])
+    if c.source is not surface or c.scale_key != sk:
+        c.source, c.scale_key = surface, sk
+        c.scaled = _scale(surface, key)
+        c.key = None  # rotated stage is stale now
+    return c.scaled
+
+def _rotatedImage(c, scaled: Surface, key) -> Surface:
+    if c.key != key:
+        c.key = key
+        c.surface = _rotate(scaled, key)
     return c.surface
 
 def _animationFrame(e: entity.Animation, frames, index: int, key) -> Surface:
     c = e._cache
-    if c.source is not frames or c.key != key:
-        c.source, c.key, c.frames = frames, key, {}
-    s = c.frames.get(index)
-    if s is None:
-        s = c.frames[index] = _applyTransform(frames[index], key)
-    return s
+    sk = (key[0], key[1])
+    if c.source is not frames or c.scale_key != sk:
+        c.source, c.scale_key, c.key = frames, sk, key
+        c.scaled_frames, c.frames = {}, {}
+    elif c.key != key:
+        c.key, c.frames = key, {}
+    out = c.frames.get(index)
+    if out is None:
+        scaled = c.scaled_frames.get(index)
+        if scaled is None:
+            scaled = c.scaled_frames[index] = _scale(frames[index], key)
+        out = c.frames[index] = _rotate(scaled, key)
+    return out
+
+def _blitWrapped(screen: Surface, src: Surface, pos, ox: int, oy: int) -> None:
+    """Draw `src` at `pos` as if it had been Surface.scroll(ox, oy, SCROLL_REPEAT)'ed."""
+    x, y = pos
+    w, h = src.get_size()
+    for dx, sx0, sw in ((ox, 0, w - ox), (0, w - ox, ox)):
+        if sw <= 0: continue
+        for dy, sy0, sh in ((oy, 0, h - oy), (0, h - oy, oy)):
+            if sh <= 0: continue
+            screen.blit(src, (x + dx, y + dy), (sx0, sy0, sw, sh))
 
 def invalidateTransformCache(e) -> None:
     """Call this if you edit the *pixels* of an Image / Animation frame in place
     while it has a non-identity transformation. Reassigning e.image, e.animation
     or e.transformation is detected automatically and needs no call."""
     if hasattr(e, "_cache"):
-        e._cache.key = None
+        e._cache.source = None
 
 @lru_cache(maxsize=512)
 def _renderText(font, text, color, outline_color, outline_width) -> Surface:
@@ -113,21 +148,44 @@ def drawEntity(screen: Surface, e: entity.Entity, pos_offset=(0, 0), transformat
             if not visible:
                 return
 
-            scrolling = scroll[0] != 0 or scroll[1] != 0
-            if scrolling:
-                # @Bug, Todo: Where is delta time bro.
-                surface.scroll(scroll[0], scroll[1], SCROLL_REPEAT)
-
             key = _transformKey(transformation[0], transformation[1],
                                 transformation[2] - transformation_offset[2])
-            surface = _imageSurface(e, surface, key, scrolling)
+            draw_pos = calcPos(pos)
+            if _offscreen(screen, draw_pos, surface.get_size(), key):
+                return
 
-            if center:
-                surface_pos = tupleSub(calcPos(pos), tupleIDiv(surface.get_size(), (2, 2)))
+            c = e._cache
+            scaled = _scaledImage(c, surface, key)
+
+            if scroll[0] == 0 and scroll[1] == 0:
+                out = _rotatedImage(c, scaled, key)
+                if center:
+                    draw_pos = tupleSub(draw_pos, tupleIDiv(out.get_size(), (2, 2)))
+                screen.blit(out, draw_pos)
+                return
+
+            # @Bug, Todo: Where is delta time bro. (scroll is still "per frame")
+            # Scroll is accumulated in source pixels; the source is never modified.
+            w, h = scaled.get_size()
+            if w == 0 or h == 0:
+                return
+            c.scroll_x = (c.scroll_x + scroll[0]) % surface.get_width()
+            c.scroll_y = (c.scroll_y + scroll[1]) % surface.get_height()
+            ox = round(c.scroll_x * key[0]) % w
+            oy = round(c.scroll_y * key[1]) % h
+
+            if _isZeroAngle(key[2]):
+                if center:
+                    draw_pos = tupleSub(draw_pos, tupleIDiv((w, h), (2, 2)))
+                _blitWrapped(screen, scaled, draw_pos, ox, oy)
             else:
-                surface_pos = calcPos(pos)
-
-            screen.blit(surface, surface_pos)
+                # Rare: scrolling *and* rotated. Scroll a copy, then rotate it.
+                tmp = scaled.copy()
+                tmp.scroll(ox, oy, SCROLL_REPEAT)
+                out = transform.rotate(tmp, key[2])
+                if center:
+                    draw_pos = tupleSub(draw_pos, tupleIDiv(out.get_size(), (2, 2)))
+                screen.blit(out, draw_pos)
 
         # @Note: Debatable if this animation iteration logic should be put somewhere else.
         case entity.Animation(pos=pos, transformation=transformation, animation=animation, delay_ms=delay_ms, center=center, clock=clock, frame_index=i, excess_ms=ms_left, visible=visible):
@@ -140,19 +198,20 @@ def drawEntity(screen: Surface, e: entity.Entity, pos_offset=(0, 0), transformat
                 ms_left -= delay_ms
                 i = (i + 1) % len(animation)
 
+            e.frame_index = i
+            e.excess_ms = ms_left
+
             # @Bug?: unlike Image, this ignores transformation_offset[2]. Kept as-is.
             key = _transformKey(transformation[0], transformation[1], transformation[2])
+            draw_pos = calcPos(pos)
+            if _offscreen(screen, draw_pos, animation[i].get_size(), key):
+                return
+
             surface = _animationFrame(e, animation, i, key)
 
             if center:
-                surface_pos = tupleSub(calcPos(pos), tupleIDiv(surface.get_size(), (2, 2)))
-            else:
-                surface_pos = calcPos(pos)
-
-            screen.blit(surface, surface_pos)
-
-            e.frame_index = i
-            e.excess_ms = ms_left
+                draw_pos = tupleSub(draw_pos, tupleIDiv(surface.get_size(), (2, 2)))
+            screen.blit(surface, draw_pos)
 
         case entity.Container(pos=pos, transformation=transformation, entities=es, visible=visible):
             if visible:

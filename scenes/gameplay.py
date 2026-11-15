@@ -197,10 +197,20 @@ def gameplay(screen, context):
         image = None,
     )
 
+    auto_text = entity.Text((SCREEN_WIDTH - 134, SCREEN_HEIGHT - 48), big_font, "")
+    score_text = entity.Text((track_pos_x + 200, SCREEN_HEIGHT - 128 + 00), big_font, "")
+    combo_text = entity.Text((track_pos_x + 200, SCREEN_HEIGHT - 128 + 48), big_font, "")
+    accuracy_text = entity.Text((track_pos_x + 200, SCREEN_HEIGHT - 128 + 96), small_font, "")
+    time_text = entity.Text((8, SCREEN_HEIGHT - 32), small_font, "")
     entities: List[entity.Entity] = [
         background,
         game,
-        transition,
+        auto_text,
+        score_text,
+        combo_text,
+        accuracy_text,
+        time_text,
+    transition,
     ]
 
     transformation_events: List[lerp.TransformationEvent] = [
@@ -212,6 +222,8 @@ def gameplay(screen, context):
             0.8,
         ),
     ]
+
+    clock.tick()
 
     while running:
         for event in pygame.event.get():
@@ -228,6 +240,12 @@ def gameplay(screen, context):
                             auto = not auto
                         case pygame.K_F1:
                             debug_state.level = (debug_state.level + 1) % debug_state.count
+
+        delta_time_s = clock.tick(GAMEPLAY_FPS_LIMIT) / 1000
+        if pygame.mixer.music.get_busy() and not rewinding:
+            time = music_time_base + (pygame.mixer.music.get_pos() - music_pos_base) / 1000
+        else:
+            time += delta_time_s
 
         if counting_down and time >= 0.0:
             pygame.mixer.music.play()
@@ -490,7 +508,7 @@ def gameplay(screen, context):
                 judgement_feedback = None
             else:
                 text = judgement_text[judgement_feedback.grade]
-                combo_text = str(combo)
+                combo_feedback_text = str(combo)
                 feedback_surface = big_font.render(text, True, JUDGEMENT_COLORS[judgement_feedback.grade])
                 feedback_surface_rect = feedback_surface.get_rect(center=(track_pos_x, SCREEN_HEIGHT // 2 - 48))
                 big_font.outline = 2
@@ -499,10 +517,10 @@ def gameplay(screen, context):
                 feedback_surface = outline_surface
                 big_font.outline = 0
 
-                combo_feedback_surface = big_font.render(combo_text, True, (255, 255, 255))
+                combo_feedback_surface = big_font.render(combo_feedback_text, True, (255, 255, 255))
                 combo_feedback_surface_rect = combo_feedback_surface.get_rect(center=(track_pos_x, SCREEN_HEIGHT // 2))
                 big_font.outline = 2
-                combo_outline_surface = big_font.render(combo_text, True, (0, 0, 0))
+                combo_outline_surface = big_font.render(combo_feedback_text, True, (0, 0, 0))
                 combo_outline_surface.blit(combo_feedback_surface, (2, 2))
                 combo_feedback_surface = combo_outline_surface
                 big_font.outline = 0
@@ -512,26 +530,19 @@ def gameplay(screen, context):
 
 
         pygame.draw.line(game.image, (0, 0, 0),   (track_pos_x + 220, SCREEN_HEIGHT // 2 + 400), (track_pos_x + 220, SCREEN_HEIGHT // 2), 32)
-        pygame.draw.line(game.image, (255, 0, 0), (track_pos_x + 220, SCREEN_HEIGHT // 2 + 398), (track_pos_x + 220, SCREEN_HEIGHT // 2 + 2 + 400 * ((100 - health) / 100)), 28)
+        pygame.draw.line(game.image, (200, 0, 0), (track_pos_x + 220, SCREEN_HEIGHT // 2 + 398), (track_pos_x + 220, SCREEN_HEIGHT // 2 + 2 + 400 * ((100 - health) / 100)), 28)
 
         cramped_time  = cramp(time, 0, song_length)
         cramped_time_minutes = math.trunc(cramped_time / 60)
         cramped_time_seconds = math.floor(math.fmod(cramped_time, 60))
-        auto_text     = big_font.render("AUTO", True, pygame.Color("yellow"))
-        score_text    = big_font.render(f'{score:.0f}', True, pygame.Color("white"))
-        combo_text    = big_font.render(f'{combo}x', True, pygame.Color("white"))
-        accuracy_text = small_font.render(f'{accuracy * 100:.2f}%', True, pygame.Color("white"))
-        time_percent  = cramped_time / song_length * 100
-        time_text     = small_font.render(
-            f'{cramped_time_minutes}:{cramped_time_seconds:02}/{song_length_minutes}:{song_length_seconds:02} ({time_percent:.0f}%)',
-            True,
-            pygame.Color("white"),
-        )
-        game.image.blit(score_text,    (track_pos_x + 200, SCREEN_HEIGHT - 128 + 00))
-        game.image.blit(combo_text,    (track_pos_x + 200, SCREEN_HEIGHT - 128 + 48))
-        game.image.blit(accuracy_text, (track_pos_x + 200, SCREEN_HEIGHT - 128 + 96))
-        game.image.blit(time_text,     (8, SCREEN_HEIGHT - 32))
-        if auto: game.image.blit(auto_text, (SCREEN_WIDTH - 134, SCREEN_HEIGHT - 48))
+
+        auto_text.content     = "AUTO"
+        score_text.content    = f'{score:.0f}'
+        combo_text.content    = f'{combo}x'
+        accuracy_text.content = f'{accuracy * 100:.2f}%'
+        time_text.content     = f'{cramped_time_minutes}:{cramped_time_seconds:02}/{song_length_minutes}:{song_length_seconds:02} ({cramped_time / song_length * 100:.0f}%)'
+        auto_text.content     = "AUTO" * auto # @Note: It's funny
+            
         pygame.draw.rect(game.image, pygame.Color("yellow"), (0, SCREEN_HEIGHT - 4, int(SCREEN_WIDTH * (time / song_length)), 4))
 
         lerp.processTransformationEvents(transformation_events, delta_time_s)
@@ -552,11 +563,5 @@ def gameplay(screen, context):
             drawDebugInfo(screen, clock.get_fps(), quick_debug_info,bulk_debug_info)
 
         pygame.display.flip()
-
-        delta_time_s = clock.tick(GAMEPLAY_FPS_LIMIT) / 1000
-        if pygame.mixer.music.get_busy() and not rewinding:
-            time = music_time_base + (pygame.mixer.music.get_pos() - music_pos_base) / 1000
-        else:
-            time += delta_time_s
 
     return next_scene, context

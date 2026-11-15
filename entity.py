@@ -75,19 +75,25 @@ class CircleButton:
     center: bool = True
 
 class TransformCache:
-    """Scratch space draw.py uses to remember an already-transformed surface.
+    """Scratch space draw.py uses to remember already-transformed surfaces.
 
     Not part of the public entity API: draw.py owns it, lerp ignores it
     (its field type is not one of the lerp-able types), and it is excluded
     from repr/eq/init on the entities that carry it.
     """
-    __slots__ = ("source", "key", "surface", "frames")
+    __slots__ = ("source", "scale_key", "key", "scaled", "surface",
+                 "scaled_frames", "frames", "scroll_x", "scroll_y")
 
     def __init__(self) -> None:
-        self.source = None   # the original surface (or animation list) the cache was built from
-        self.key = None      # (scale_x, scale_y, angle) the cache was built for
-        self.surface = None  # Image: the transformed surface
-        self.frames = {}     # Animation: frame index -> transformed surface
+        self.source = None         # original surface (Image) / frame list (Animation)
+        self.scale_key = None      # (sx, sy) the scaled stage was built for
+        self.key = None            # (sx, sy, angle) the rotated stage was built for
+        self.scaled = None         # Image: scaled surface
+        self.surface = None        # Image: scaled + rotated surface
+        self.scaled_frames = {}    # Animation: frame index -> scaled surface
+        self.frames = {}           # Animation: frame index -> scaled + rotated surface
+        self.scroll_x = 0          # Image: accumulated scroll, in source pixels
+        self.scroll_y = 0
 
 @dataclass
 class Image:

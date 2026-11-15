@@ -88,14 +88,13 @@ def mainMenu(screen, context):
 
     main_menu_animation_guy = entity.Animation(
         pos = (-1920, 1400),
-        transformation = (0.75, 0.75, 0),
+        transformation = (0.8, 0.8, 0),
         animation = [
-            pygame.image.load("assets/holdnote0000.png", "holdnote0000.png").convert_alpha(),
-            pygame.image.load("assets/holdnote0001.png", "holdnote0001.png").convert_alpha(),
-            pygame.image.load("assets/holdnote0002.png", "holdnote0002.png").convert_alpha(),
-            pygame.image.load("assets/holdnote0003.png", "holdnote0003.png").convert_alpha(),
+            pygame.image.load("assets/idle0000.png", "idle0000.png").convert_alpha(),
+            pygame.image.load("assets/idle0001.png", "idle0001.png").convert_alpha(),
+            pygame.image.load("assets/idle0002.png", "idle0002.png").convert_alpha(),
+            pygame.image.load("assets/idle0003.png", "idle0003.png").convert_alpha(),
         ],
-        center = False,
     )
     transition = entity.Circle((SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2), 0, (0, 0, 0))
 
@@ -127,7 +126,7 @@ def mainMenu(screen, context):
             main_menu_animation_guy,
             copy(main_menu_animation_guy),
             entity.Animation(
-                pos = (-100, 300),
+                pos = (180, 300),
                 transformation = main_menu_animation_guy.transformation,
                 animation = main_menu_animation_guy.animation,
                 delay_ms = 1000 // 8,

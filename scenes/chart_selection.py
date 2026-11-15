@@ -129,7 +129,7 @@ def chartSelection(screen, context):
         text_str = (chart.title + "\nby " + chart.artist) if is_selected else chart.title
         text_y   = -32 if is_selected else -16
 
-        txt_entity = entity.Text((-280, text_y), drawer_font, text_str,(255, 197, 0),(94, 56, 42), outline_width=6) #เปลี่ยนสีฟ้อนเพลงในลิ้นชัก
+        txt_entity = entity.Text((-280, text_y), drawer_font, text_str, (255, 197, 0), (94, 56, 42), outline_width=6) #เปลี่ยนสีฟ้อนเพลงในลิ้นชัก
         drawer_box = entity.Container(
             pos = (start_x, start_y),
             transformation = (1, 1, 0),
