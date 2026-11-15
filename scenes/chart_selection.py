@@ -9,6 +9,7 @@ from utils import *
 import scenes.scenes as scenes
 from draw import drawEntities
 import entity
+from ui import ButtonFeedback
 import lerp
 import oszloader
 import data_io
@@ -114,7 +115,7 @@ def chartSelection(screen, context):
     linchuck_png = pygame.image.load("assets/linchuck.png", "linchuck.png").convert_alpha()
     drawer_gap   = max(175, int(linchuck_png.get_height() * 0.8) + 4)  #ระยะห่างลิ้นชัก
     curve_step_x = 75                                                  #ความเอียงตอนเปลี่ยนลิ้นชัก
-    drawer_font  = pygame.font.Font(None, 50)
+    drawer_font  = pygame.font.Font(ITIM_FONT, 50)
 
     drawer_containers = []
     drawer_texts = []
@@ -127,7 +128,7 @@ def chartSelection(screen, context):
         start_x  = -40 if is_selected else abs(dist) * curve_step_x
         start_y  = dist * drawer_gap
         text_str = (chart.title + "\nby " + chart.artist) if is_selected else chart.title
-        text_y   = -32 if is_selected else -16
+        text_y   = -64 if is_selected else -32
 
         txt_entity = entity.Text((-280, text_y), drawer_font, text_str, (255, 197, 0), (94, 56, 42), outline_width=6) #เปลี่ยนสีฟ้อนเพลงในลิ้นชัก
         drawer_box = entity.Container(
@@ -148,7 +149,7 @@ def chartSelection(screen, context):
             is_selected = (dist == 0)
 
             drawer_texts[i].content = (chart.title + "\nby " + chart.artist) if is_selected else chart.title
-            drawer_texts[i].pos = (-280, -32 if is_selected else -16)
+            drawer_texts[i].pos = (-280, -64 if is_selected else -32)
 
             if is_selected:
                 # ดึงออกมาเฉพาะลิ้นชักที่ถูกเลือกอันเดียว! (-240 ตอนเปิด, -40 ตอนเก็บ)
@@ -172,7 +173,7 @@ def chartSelection(screen, context):
     paper_image  = entity.Image((500, 540), (1, 1, 0), paper_png, True)
     play_image   = entity.Image((500, 780), (1, 1, 0), play_png, True)
     play_button  = entity.RectButton(play_image.pos, play_image.image.get_size(), id=button_id.CHART_PLAY, center=True)
-    version_text = entity.Text((500, 540), pygame.font.Font(None, 48), get_current_version()[0], (0, 0, 0), outline_width=0, center=True)
+    version_text = entity.Text((500, 540), pygame.font.Font(ITIM_FONT, 48), get_current_version()[0], (0, 0, 0), outline_width=0, center=True)
 
     current_chart_info = entity.Container(
         pos = (0, 1080),
@@ -181,7 +182,7 @@ def chartSelection(screen, context):
             paper_image,
             play_image,
             play_button,
-            entity.Text((500, 260), pygame.font.Font(None, 64), "Difficulty:", (0, 0, 0), outline_width=0, center=True),
+            entity.Text((500, 260), pygame.font.Font(ITIM_FONT, 64), "Difficulty:", (0, 0, 0), outline_width=0, center=True),
             version_text,
         ],
         visible = False
@@ -205,8 +206,8 @@ def chartSelection(screen, context):
         visible = False,
     )
 
-    title_font      = pygame.font.Font(None, 128)
-    back_label_font = pygame.font.Font(None, 67)
+    title_font      = pygame.font.Font(ITIM_FONT, 128)
+    back_label_font = pygame.font.Font(ITIM_FONT, 67)
     selecting_title = entity.Text((SCREEN_WIDTH // 2, 110), title_font, "Selecting", outline_width=6, center=True)
     back_label      = entity.Text((SCREEN_WIDTH // 8, 100), back_label_font, "back",(94, 56, 42), outline_width=0, center=True)
 
@@ -228,6 +229,8 @@ def chartSelection(screen, context):
         version_next_arrow,
         transition,
     ]
+
+    button_feedback = ButtonFeedback.fromEntities(entities)
 
     entities_text = "[\n"
     for e in entities:
@@ -266,6 +269,7 @@ def chartSelection(screen, context):
         button_hovers = [False for _ in range(button_id.COUNT)]
         detectButtonCollisions(button_clicks, button_hovers, entities, mouse_pos, (-camera_pos.x, -camera_pos.y))
         pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_HAND if any(button_hovers) else pygame.SYSTEM_CURSOR_ARROW)
+        button_feedback.update(button_clicks, button_hovers, delta_time_s)
 
         if button_clicks[button_id.CHART_BACK]:
             transformation_events.append(

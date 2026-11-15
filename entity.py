@@ -21,6 +21,7 @@ Color: TypeAlias = tuple[float, float, float]
 # @Note: Special Type that is not compatible with lerp.
 Index: TypeAlias = int
 Millisecond: TypeAlias = int
+Multiplier: TypeAlias = float
 
 @dataclass
 class Position2:
@@ -63,7 +64,7 @@ class Text:
     content: str
     color: Color = (255, 255, 255)
     outline_color: Color = (0, 0, 0)
-    outline_width: int = 2
+    outline_width: int = 4
     center: bool = False
 
 @dataclass
@@ -109,6 +110,9 @@ class Image:
     center: bool = False
     scroll_rate: Point2i = (0, 0)
     visible: bool = True
+    # @Note: Extra render-time scale on top of `transformation` (hover/press feedback, ...).
+    #        Typed `Multiplier` on purpose so lerp leaves it alone while it animates `transformation`.
+    scale: Multiplier = 1.0
     _cache: TransformCache = field(default_factory=TransformCache, init=False, repr=False, compare=False)
 
 @dataclass

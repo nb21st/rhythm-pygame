@@ -7,6 +7,7 @@ import pytweening
 # @Note: Local library
 from draw import drawEntities
 import entity
+from ui import ButtonFeedback
 import lerp
 import scenes.scenes as scenes
 from utils import *
@@ -16,7 +17,7 @@ def mainMenu(screen, context):
 
     clock = pygame.time.Clock()
     running = True
-    big_font = pygame.font.Font(None, 128)
+    big_font = pygame.font.Font(ITIM_FONT, 128)
 
     class button_id(IntEnum):
         MAIN_MENU_NEXT    = 0
@@ -109,6 +110,8 @@ def mainMenu(screen, context):
         transition,
     ]
 
+    button_feedback = ButtonFeedback.fromEntities(entities)
+
     entities_text = "[\n"
     for e in entities:
         entities_text += "    " + type(e).__name__ + ",\n"
@@ -179,6 +182,7 @@ def mainMenu(screen, context):
         button_hovers = [False for _ in range(button_id.COUNT)]
         detectButtonCollisions(button_clicks, button_hovers, entities, mouse_pos, (-camera_pos.x, -camera_pos.y))
         pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_HAND if any(button_hovers) else pygame.SYSTEM_CURSOR_ARROW)
+        button_feedback.update(button_clicks, button_hovers, delta_time_s)
 
         if button_clicks[button_id.MAIN_MENU_NEXT]:
            main_menu_selection_target_rotation += 120

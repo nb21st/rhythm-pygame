@@ -97,6 +97,8 @@ def gameplay(screen, context):
     next_scene = scenes.chartSelection
     beatmapset_filename, beatmap_filename, beatmap_id = context
 
+    pygame.mouse.set_visible(False)
+
     auto            = False
     beatmap_name    = ""
     song_filename   = ""
@@ -128,8 +130,8 @@ def gameplay(screen, context):
     hit_lightings       = [None, None, None, None]
     judgement_feedback  = HitLighting(None, 0.0)
 
-    small_font = pygame.font.SysFont("Liberation Sans", 16)
-    big_font   = pygame.font.Font(None, 64)
+    small_font = pygame.font.Font(ITIM_FONT, 32)
+    big_font   = pygame.font.Font(ITIM_FONT, 48)
 
     MAX_SCORE        = 1_000_000.0
     mod_multiplier   = 1.0
@@ -218,11 +220,11 @@ def gameplay(screen, context):
         image = None,
     )
 
-    auto_text = entity.Text((SCREEN_WIDTH - 134, SCREEN_HEIGHT - 48), big_font, "")
-    score_text = entity.Text((track_pos_x + 240, SCREEN_HEIGHT - 128 + 00), big_font, "")
-    combo_text = entity.Text((track_pos_x + 240, SCREEN_HEIGHT - 128 + 48), big_font, "")
-    accuracy_text = entity.Text((track_pos_x + 240, SCREEN_HEIGHT - 128 + 96), small_font, "")
-    time_text = entity.Text((8, SCREEN_HEIGHT - 32), small_font, "")
+    auto_text           = entity.Text((SCREEN_WIDTH - 220, SCREEN_HEIGHT - 96), big_font, "", color=(255, 255, 0))
+    score_text          = entity.Text((track_pos_x + 240, SCREEN_HEIGHT - 128 - 32), big_font, "")
+    combo_text          = entity.Text((track_pos_x + 240, SCREEN_HEIGHT - 128 + 16), big_font, "")
+    accuracy_text       = entity.Text((track_pos_x + 240, SCREEN_HEIGHT - 128 + 68), small_font, "")
+    time_text           = entity.Text((8, SCREEN_HEIGHT - 64), small_font, "")
     combo_feedback_text = entity.Text((track_pos_x, SCREEN_HEIGHT // 2), big_font, "", center=True)
     grade_feedback_text = entity.Text((track_pos_x, SCREEN_HEIGHT // 2 - 48), big_font, "", center=True)
 
@@ -311,6 +313,7 @@ def gameplay(screen, context):
                     pygame.quit()
                     sys.exit(0)
                 case custom_event.QUIT_SCENE:
+                    pygame.mouse.set_visible(True)
                     running = False
                 case pygame.KEYDOWN:
                     match event.key:
@@ -318,6 +321,8 @@ def gameplay(screen, context):
                             auto = not auto
                         case pygame.K_F1:
                             debug_state.level = (debug_state.level + 1) % debug_state.count
+                        case pygame.K_ESCAPE:
+                            health = 0
 
         delta_time_s = clock.tick(GAMEPLAY_FPS_LIMIT) / 1000
         if pygame.mixer.music.get_busy() and not rewinding:
@@ -331,17 +336,36 @@ def gameplay(screen, context):
             music_pos_base  = pygame.mixer.music.get_pos()
             counting_down = False
 
-        # @Note: End Game
         song_end = time >= song_length and song_length > 0.0
-        if health <= 0:
-            pygame.mixer.music.stop()
-            running = False
-        elif song_end and not game_end:
-            # Write beatmap_id and score to files
-            pygame.mixer.music.stop()
-            data_io.write_data("data/score.txt", {beatmap_id:round(score)})
-            pygame.time.set_timer(custom_event.QUIT_SCENE, 3000, 1)
-            game_end = True
+        if not game_end:
+            if health <= 0:
+                pygame.mixer.music.stop()
+                transformation_events.append(
+                    lerp.TransformationEvent(
+                        transition,
+                        copy(transition),
+                        entity.Circle(transition.pos, 1100, DARK_BACKGROUND_COLOR),
+                        pytweening.easeInExpo,
+                        0.5,
+                    )
+                )
+                pygame.time.set_timer(custom_event.QUIT_SCENE, 500, 1)
+                game_end = True
+            elif song_end:
+                # Write beatmap_id and score to files
+                pygame.mixer.music.stop()
+                data_io.write_data("data/score.txt", {beatmap_id:round(score)})
+                transformation_events.append(
+                    lerp.TransformationEvent(
+                        transition,
+                        copy(transition),
+                        entity.Circle(transition.pos, 1100, DARK_BACKGROUND_COLOR),
+                        pytweening.easeInExpo,
+                        2.0,
+                    ),
+                )
+                pygame.time.set_timer(custom_event.QUIT_SCENE, 2000, 1)
+                game_end = True
 
         keyboard_inputs = pygame.key.get_pressed()
 
@@ -622,8 +646,8 @@ def gameplay(screen, context):
             grade_feedback_text.content = judgement_text[judgement_feedback.grade]
             combo_feedback_text.content = str(combo)
 
-        pygame.draw.line(game.image, (0, 0, 0),   (track_pos_x + 260, SCREEN_HEIGHT // 2 + 400), (track_pos_x + 260, SCREEN_HEIGHT // 2), 32)
-        pygame.draw.line(game.image, (200, 0, 0), (track_pos_x + 260, SCREEN_HEIGHT // 2 + 398), (track_pos_x + 260, SCREEN_HEIGHT // 2 + 2 + 400 * ((100 - health) / 100)), 28)
+        pygame.draw.line(game.image, (0, 0, 0),   (track_pos_x + 260, SCREEN_HEIGHT // 2 + 388), (track_pos_x + 260, SCREEN_HEIGHT // 2), 32)
+        pygame.draw.line(game.image, (200, 0, 0), (track_pos_x + 260, SCREEN_HEIGHT // 2 + 386), (track_pos_x + 260, SCREEN_HEIGHT // 2 + 2 + 400 * ((100 - health) / 100)), 28)
 
         cramped_time  = cramp(time, 0, song_length)
         cramped_time_minutes = math.trunc(cramped_time / 60)

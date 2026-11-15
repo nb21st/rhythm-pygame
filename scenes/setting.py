@@ -153,7 +153,16 @@ def setting(screen, context):
 
         if button_clicks[button_id.CHART_SELECTION_BACK]:
             next_scene = scenes.mainMenu
-            pygame.event.post(pygame.event.Event(custom_event.QUIT_SCENE))
+            pygame.time.set_timer(custom_event.QUIT_SCENE, 300, 1)
+            transformation_events.append(
+                lerp.TransformationEvent(
+                    camera_pos,
+                    copy(camera_pos),
+                    entity.Position2(0, 1080),
+                    pytweening.easeInCirc,
+                    0.3,
+                )
+            )
 
         for i, condition in enumerate(button_clicks[button_id.KEY1_KEYBIND:button_id.KEY4_KEYBIND + 1]):
             if condition:

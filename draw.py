@@ -156,11 +156,11 @@ def drawEntity(screen: Surface, e: entity.Entity, pos_offset=(0, 0), transformat
             else:
                 screen.blit(text_surface, calcPos(pos))
 
-        case entity.Image(pos=pos, transformation=transformation, image=surface, center=center, scroll_rate=scroll, visible=visible):
+        case entity.Image(pos=pos, transformation=transformation, image=surface, center=center, scroll_rate=scroll, visible=visible, scale=extra):
             if not visible:
                 return
 
-            key = _transformKey(transformation[0] * osx, transformation[1] * osy,
+            key = _transformKey(transformation[0] * osx * extra, transformation[1] * osy * extra,
                                 transformation[2] - oangle)
             draw_pos = calcPos(pos)
             if _offscreen(screen, draw_pos, surface.get_size(), key):

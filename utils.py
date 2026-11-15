@@ -5,6 +5,7 @@
 import pygame
 import entity
 
+ITIM_FONT = "assets/font/Itim-Regular.ttf"
 LIGHT_BACKGROUND_COLOR = tuple(pygame.Color("#f6b678"))
 DARK_BACKGROUND_COLOR  = tuple(pygame.Color("#d98352"))
 SCREEN_WIDTH  = 1920
