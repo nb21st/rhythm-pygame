@@ -1,8 +1,8 @@
 Rhythm Pygame
 =============
 
-https://www.youtube.com/watch?v=ckQyLWJ8Fw
-[![Watch the video](https://img.youtube.com/vi/QckQyLWJ8Fw/hqdefault.jpg)](https://www.youtube.com/watch?v=ckQyLWJ8Fw)
+https://www.youtube.com/watch?v=QckQyLWJ8Fw
+[![Watch the video](https://img.youtube.com/vi/QckQyLWJ8Fw/hqdefault.jpg)](https://www.youtube.com/watch?v=QckQyLWJ8Fw)
 
 Keybinds
 --------
