@@ -1,14 +1,16 @@
 import pygame
 import math
 import zipfile
-import oszloader       as osu
 from copy              import copy
-from mutagen.mp3       import MP3
-from mutagen.oggvorbis import OggVorbis
 from dataclasses       import dataclass
 from enum              import IntEnum, auto
+from mutagen.mp3       import MP3
+from mutagen.oggvorbis import OggVorbis
 from utils             import *
+from draw              import drawEntities
 import scenes.scenes as scenes
+import oszloader       as osu
+import entity
 import data_io
 
 @dataclass
@@ -69,7 +71,7 @@ def gameplay(screen, context):
     beatmap_name    = ""
     song_filename   = ""
 
-    track_pos_x     = SCREEN_WIDTH // 2
+    track_pos_x     = SCREEN_WIDTH // 4
 
     beatmaps_directory = "songs/"
 
@@ -93,7 +95,7 @@ def gameplay(screen, context):
     COLUMN_GAP    = 80
 
     hit_lightings       = [None, None, None, None]
-    latest_hit_lighting  = None
+    judgement_feedback  = None
 
     small_font = pygame.font.SysFont("Liberation Sans", 16)
     big_font   = pygame.font.Font(None, 64)
@@ -171,10 +173,22 @@ def gameplay(screen, context):
     song_length_minutes = int(song_length) // 60
     song_length_seconds = int(song_length) % 60
 
+    f.seek(0)
     pygame.mixer.music.load(f)
 
     time = -2.0
     counting_down = True
+
+    camera_pos = entity.Position2(0, 0)
+    background = entity.Image(
+        pos = (0, 0),
+        transformation = (1, 1, 0),
+        image = pygame.image.load("assets/background.png").convert(),
+    )
+
+    entities: List[entity.Entity] = [
+        background,
+    ]
 
     while running:
         if counting_down and time >= 0.0:
@@ -335,12 +349,14 @@ def gameplay(screen, context):
 
             hit_lighting = HitLighting(grade, 1.0)
             hit_lightings[hit_object.key] = hit_lighting
-            latest_hit_lighting = copy(hit_lighting)
-            latest_hit_lighting.lifetime = 3.0
+            judgement_feedback = copy(hit_lighting)
+            judgement_feedback.lifetime = 3.0
 
         hit_objects = list(filter(lambda x: x not in hit_object_deletes, hit_objects))
 
         # @Section: Draw
+
+        drawEntities(screen, entities, (-camera_pos.x, -camera_pos.y))
 
         # @Note: This seems inflexible
         sawtooth_color_light   = pygame.Color((255, 255, 255))
@@ -350,12 +366,19 @@ def gameplay(screen, context):
         sawtooth_color_light   = sawtooth_color_light.premul_alpha()
         sawtooth_color_dark    = sawtooth_color_dark.premul_alpha()
 
-        screen.fill(sawtooth_color_dark)
+        track_bg = pygame.Surface(SCREEN_SIZE, pygame.SRCALPHA)
+        pygame.draw.rect(
+            track_bg,
+            pygame.Color((0, 0, 0)),
+            (track_pos_x - (80 + 96), 0, (80 + 96) * 2, SCREEN_HEIGHT)
+        )
+        track_bg.set_alpha(200)
+        screen.blit(track_bg)
 
-        for column_track_i in [0, 1, 2, 3]:
+        for column_track_i in range(4):
             pygame.draw.rect(
                 screen,
-                pygame.Color("black"),
+                pygame.Color((0, 0, 0)),
                 (track_pos_x + (column_track_i - 1.5) * COLUMN_GAP - 32, 0, 64, HITBAR_Y),
             )
 
@@ -432,12 +455,6 @@ def gameplay(screen, context):
             if hit_lighting.lifetime <= 0.0:
                 hit_lightings[key] = None
 
-        if latest_hit_lighting is not None:
-            latest_hit_lighting.lifetime -= dt * 3 * (1 + 2 * (latest_hit_lighting.grade == Judgement.NONE))
-            if latest_hit_lighting.lifetime <= 0.0:
-                latest_hit_lighting = None
-
-
         for key_guide_x in [0, 1, 2, 3]:
             pygame.draw.circle(
                 screen,
@@ -446,30 +463,35 @@ def gameplay(screen, context):
                 8,
             )
 
-        if latest_hit_lighting is not None:
-            text = judgement_text[latest_hit_lighting.grade]
-            combo_text = str(combo)
-            feedback_surface = big_font.render(text, True, JUDGEMENT_COLORS[latest_hit_lighting.grade])
-            feedback_surface_rect = feedback_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2 - 48))
-            big_font.outline = 2
-            outline_surface = big_font.render(text, True, (0, 0, 0))
-            outline_surface.blit(feedback_surface, (2, 2))
-            feedback_surface = outline_surface
-            big_font.outline = 0
+        if judgement_feedback is not None:
+            judgement_feedback.lifetime -= dt * 3 * (1 + 2 * (judgement_feedback.grade == Judgement.NONE))
 
-            combo_feedback_surface = big_font.render(combo_text, True, (255, 255, 255))
-            combo_feedback_surface_rect = combo_feedback_surface.get_rect(center=(SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2))
-            big_font.outline = 2
-            combo_outline_surface = big_font.render(combo_text, True, (0, 0, 0))
-            combo_outline_surface.blit(combo_feedback_surface, (2, 2))
-            combo_feedback_surface = combo_outline_surface
-            big_font.outline = 0
+            if judgement_feedback.lifetime <= 0.0:
+                judgement_feedback = None
+            else:
+                text = judgement_text[judgement_feedback.grade]
+                combo_text = str(combo)
+                feedback_surface = big_font.render(text, True, JUDGEMENT_COLORS[judgement_feedback.grade])
+                feedback_surface_rect = feedback_surface.get_rect(center=(track_pos_x, SCREEN_HEIGHT // 2 - 48))
+                big_font.outline = 2
+                outline_surface = big_font.render(text, True, (0, 0, 0))
+                outline_surface.blit(feedback_surface, (2, 2))
+                feedback_surface = outline_surface
+                big_font.outline = 0
 
-            screen.blit(feedback_surface, feedback_surface_rect)
-            screen.blit(combo_feedback_surface, combo_feedback_surface_rect)
+                combo_feedback_surface = big_font.render(combo_text, True, (255, 255, 255))
+                combo_feedback_surface_rect = combo_feedback_surface.get_rect(center=(track_pos_x, SCREEN_HEIGHT // 2))
+                big_font.outline = 2
+                combo_outline_surface = big_font.render(combo_text, True, (0, 0, 0))
+                combo_outline_surface.blit(combo_feedback_surface, (2, 2))
+                combo_feedback_surface = combo_outline_surface
+                big_font.outline = 0
+    
+                screen.blit(feedback_surface, feedback_surface_rect)
+                screen.blit(combo_feedback_surface, combo_feedback_surface_rect)
 
 
-        pygame.draw.line(screen, "red", (SCREEN_WIDTH // 2 + 220, SCREEN_HEIGHT // 2 + 400), (SCREEN_WIDTH // 2 + 220, SCREEN_HEIGHT // 2 + 400 * ((100 - health) / 100)), 32)
+        pygame.draw.line(screen, "red", (track_pos_x + 220, SCREEN_HEIGHT // 2 + 400), (track_pos_x + 220, SCREEN_HEIGHT // 2 + 400 * ((100 - health) / 100)), 32)
 
         cramped_time  = cramp(time, 0, song_length)
         cramped_time_minutes = math.trunc(cramped_time / 60)
@@ -490,6 +512,24 @@ def gameplay(screen, context):
         screen.blit(time_text,     (8, SCREEN_HEIGHT - 32))
         if auto: screen.blit(auto_text, (SCREEN_WIDTH - 134, SCREEN_HEIGHT - 48))
         pygame.draw.rect(screen, pygame.Color("yellow"), (0, SCREEN_HEIGHT - 4, int(SCREEN_WIDTH * (time / song_length)), 4))
+
+
+        if debug_state.level >= 1:
+            quick_debug_info = {}
+            bulk_debug_info = {}
+        if debug_state.level >= 2:
+            quick_debug_info.update({
+                "camera pos": (f"({camera_pos.x:.2f}, {camera_pos.y:.2f})"),
+                "mouse pos": mouse_pos,
+                "waiting for key id": waiting_for_key_id
+            })
+        if debug_state.level >= 3:
+            bulk_debug_info.update({
+                "entities": entities_text,
+                "keybinds": keybinds,
+            })
+        if debug_state.level >= 1:
+            drawDebugInfo(screen,clock.get_fps(), quick_debug_info,bulk_debug_info)
 
         pygame.display.flip()
 

@@ -90,10 +90,10 @@ class Animation:
     animation: list[tuple[pygame.Surface, float]]
     delay_ms: int = 80
     center: bool = False
-    # @Note: This is probably a bad idea
     clock: pygame.time.Clock = field(default_factory=pygame.time.Clock)
     frame_index: Index = 0
-    excess_ms: Millisecond = 0 
+    excess_ms: Millisecond = 0
+    visible: bool = True
 
 @dataclass
 class Container:

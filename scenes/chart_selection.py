@@ -324,7 +324,7 @@ def chartSelection(screen, context):
                     copy(transition),
                     entity.Circle(
                         pos = transition.pos,
-                        radius = 1200,
+                        radius = 1100,
                         color = transition.color,
                     ),
                     pytweening.easeInExpo,

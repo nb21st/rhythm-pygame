@@ -22,7 +22,6 @@ def mainMenu(screen, context):
         MAIN_MENU_NEXT       = 0
         MAIN_MENU_PREV       = auto()
         MAIN_MENU_PLAY       = auto()
-        MAIN_MENU_EDITOR     = auto()
         MAIN_MENU_SETTING    = auto()
         MAIN_MENU_EXIT       = auto()
         COUNT                = auto()
@@ -30,46 +29,40 @@ def mainMenu(screen, context):
     camera_pos = entity.Position2(0, -1080 * 2)
     outer_background = entity.BackgroundColor(DARK_BACKGROUND_COLOR)
     inner_background = entity.Image((16, 16), (0, 0, 0), pygame.image.load("assets/introbg.png", "introbg.png").convert(), scroll_rate=(1, 0))
-    game_title = entity.Image((512 + 64, 256), (1, 1, 0), pygame.image.load("assets/game_title.png").convert_alpha(), True)
+    game_title = entity.Image((512 + 64, 256), (0.8, 0.8, 0), pygame.image.load("assets/game_title.png").convert_alpha(), True)
+    pot_png = pygame.image.load("assets/pot.png").convert_alpha()
+    plate_png = pygame.image.load("assets/plate.png").convert_alpha()
     main_menu_selection_target_rotation = -60
     main_menu_selection = entity.Container(
         pos = (SCREEN_WIDTH, SCREEN_HEIGHT),
         transformation = (1, 1, 90),
         entities = [
-            entity.Circle((0, 0), 512, DARK_BACKGROUND_COLOR),
+            entity.Image((0, 0), (1.5, 1.5, 0), plate_png, True),
             entity.Container(
-                pos = (0, -(512 + 256)),
-                transformation = (1, 1, 60 + 90 * 0),
+                pos = (0, -512),
+                transformation = (1, 1, 60 + 120 * 0),
                 entities = [
                     entity.CircleButton((0, 0), 256, id=button_id.MAIN_MENU_PLAY),
-                    entity.Circle((0, 0), 256, DARK_BACKGROUND_COLOR),
+                    entity.Image((0, 0), (1, 1, 0), pot_png, True),
                     entity.Text((0, 0), big_font, "Play", outline_width=6, center=True)
                 ],
             ),
+
             entity.Container(
-                pos = (512 + 256, 0),
-                transformation = (1, 1, 60 + 90 * 1),
-                entities = [
-                    entity.CircleButton((0, 0), 256, id=button_id.MAIN_MENU_EDITOR),
-                    entity.Circle((0, 0), 256, DARK_BACKGROUND_COLOR),
-                    entity.Text((0, 0), big_font, "Editor", outline_width=6, center=True)
-                ],
-            ),
-            entity.Container(
-                pos = (0, (512 + 256)),
-                transformation = (1, 1, 60 + 90 * 2),
+                pos = (443, 256),
+                transformation = (1, 1, 60 + 120 * 1),
                 entities = [
                     entity.CircleButton((0, 0), 256, id=button_id.MAIN_MENU_SETTING),
-                    entity.Circle((0, 0), 256, DARK_BACKGROUND_COLOR),
+                    entity.Image((0, 0), (1, 1, 0), pot_png, True),
                     entity.Text((0, 0), big_font, "Setting", outline_width=6, center=True)
                 ],
             ),
             entity.Container(
-                pos = (-(512 + 256), 0),
-                transformation = (1, 1, 60 + 90 * 3),
+                pos = (-443, 256),
+                transformation = (1, 1, 60 + 120 * 2),
                 entities = [
                     entity.CircleButton((0, 0), 256, id=button_id.MAIN_MENU_EXIT),
-                    entity.Circle((0, 0), 256, DARK_BACKGROUND_COLOR),
+                    entity.Image((0, 0), (1, 1, 0), pot_png, True),
                     entity.Text((0, 0), big_font, "Exit", outline_width=6, center=True)
                 ],
             ),
@@ -94,15 +87,15 @@ def mainMenu(screen, context):
     )
 
     main_menu_animation_guy = entity.Animation(
-        pos = (-1920, 1000),
-        transformation = (1, 1, 0),
+        pos = (-1920, 1400),
+        transformation = (0.75, 0.75, 0),
         animation = [
-            pygame.image.load("assets/idle0.png", "idle0.png").convert_alpha(),
-            pygame.image.load("assets/idle1.png", "idle1.png").convert_alpha(),
-            pygame.image.load("assets/idle2.png", "idle2.png").convert_alpha(),
-            pygame.image.load("assets/idle3.png", "idle3.png").convert_alpha(),
+            pygame.image.load("assets/holdnote0000.png", "holdnote0000.png").convert_alpha(),
+            pygame.image.load("assets/holdnote0001.png", "holdnote0001.png").convert_alpha(),
+            pygame.image.load("assets/holdnote0002.png", "holdnote0002.png").convert_alpha(),
+            pygame.image.load("assets/holdnote0003.png", "holdnote0003.png").convert_alpha(),
         ],
-        center = True,
+        center = False,
     )
     transition = entity.Circle((SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2), 0, (0, 0, 0))
 
@@ -134,7 +127,7 @@ def mainMenu(screen, context):
             main_menu_animation_guy,
             copy(main_menu_animation_guy),
             entity.Animation(
-                pos = (620, 700),
+                pos = (-100, 300),
                 transformation = main_menu_animation_guy.transformation,
                 animation = main_menu_animation_guy.animation,
                 delay_ms = 1000 // 8,
@@ -156,7 +149,7 @@ def mainMenu(screen, context):
             main_menu_selection,
             copy(main_menu_selection),
             entity.Container(
-                pos = (SCREEN_WIDTH + 128, SCREEN_HEIGHT - 64),
+                pos = (SCREEN_WIDTH, SCREEN_HEIGHT - 128),
                 transformation = (1, 1, main_menu_selection_target_rotation),
                 entities = main_menu_selection.entities
             ),
@@ -189,7 +182,7 @@ def mainMenu(screen, context):
         pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_HAND if any(button_hovers) else pygame.SYSTEM_CURSOR_ARROW)
 
         if button_clicks[button_id.MAIN_MENU_NEXT]:
-           main_menu_selection_target_rotation += 90
+           main_menu_selection_target_rotation += 120
            transformation_events.append(
               lerp.TransformationEvent(
                  main_menu_selection,
@@ -200,11 +193,11 @@ def mainMenu(screen, context):
                     entities = main_menu_selection.entities,
                  ),
                  pytweening.easeOutBack,
-                 0.4,
+                 0.8,
               )
            )
         elif button_clicks[button_id.MAIN_MENU_PREV]:
-           main_menu_selection_target_rotation -= 90
+           main_menu_selection_target_rotation -= 120
            transformation_events.append(
               lerp.TransformationEvent(
                  main_menu_selection,
@@ -215,7 +208,7 @@ def mainMenu(screen, context):
                     entities = main_menu_selection.entities,
                  ),
                  pytweening.easeOutBack,
-                 0.4,
+                 0.8,
               )
            )
         else:

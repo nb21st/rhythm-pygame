@@ -33,7 +33,7 @@ def drawEntity(screen: Surface, e: entity.Entity, pos_offset=(0, 0), transformat
                 text_surface = outline_text_surface
                 f.outline = 0
 
-            text_surface = transform.rotate(text_surface, transformation_offset[2])
+            text_surface = transform.rotate(text_surface, -transformation_offset[2])
 
             if center:
                 text_rect = text_surface.get_rect(center=calcPos(pos))
@@ -50,7 +50,7 @@ def drawEntity(screen: Surface, e: entity.Entity, pos_offset=(0, 0), transformat
 
             # @Bug, Todo: This is hella expensive. It's probably lerp job to do the surface transformation. Need to fix this.
             surface = transform.scale_by(surface, (transformation[0], transformation[1]))
-            surface = transform.rotate(surface, transformation[2])
+            surface = transform.rotate(surface, transformation[2] - transformation_offset[2])
 
             if center:
                 surface_pos = tupleSub(calcPos(pos), tupleIDiv(surface.get_size(), (2, 2)))
@@ -60,7 +60,10 @@ def drawEntity(screen: Surface, e: entity.Entity, pos_offset=(0, 0), transformat
             screen.blit(surface, surface_pos)
 
         # @Note: Debatable if this animation iteration logic should be put somewhere else.
-        case entity.Animation(pos=pos, transformation=transformation, animation=animation, delay_ms=delay_ms, center=center, clock=clock, frame_index=i, excess_ms=ms_left):
+        case entity.Animation(pos=pos, transformation=transformation, animation=animation, delay_ms=delay_ms, center=center, clock=clock, frame_index=i, excess_ms=ms_left, visible=visible):
+            if not visible:
+                return
+
             ms_left += clock.tick()
 
             while ms_left >= delay_ms:
