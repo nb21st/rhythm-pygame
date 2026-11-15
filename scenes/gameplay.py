@@ -66,12 +66,16 @@ JUDGEMENT_COLORS      = [ pygame.Color("lime")
                         , pygame.Color("white")
                         ]
 
-HIT_OBJECT_COLORS     = [ pygame.Color("tomato")
-                        , pygame.Color("gold")
-                        , pygame.Color("springgreen")
-                        , pygame.Color("deepskyblue")
+HIT_OBJECT_COLORS     = [ pygame.Color("#d5c2a1")
+                        , pygame.Color("#bf0003")
+                        , pygame.Color("#d6a0ab")
+                        , pygame.Color("#58652c")
                         ]
-HIT_OBJECT_COLORS_ALT = [pygame.Color.from_hsla(h, s * 0.5, l * 0.5, a) for h, s, l, a in map(lambda x: x.hsla , HIT_OBJECT_COLORS)]
+
+HIT_OBJECT_COLORS_ALT = [
+    pygame.Color.from_hsla(h, s, l * 1.2, a)
+    for h, s, l, a in map(lambda x: x.hsla , HIT_OBJECT_COLORS)
+]
 
 HIT_LIGHTING_COLORS = JUDGEMENT_COLORS + HIT_OBJECT_COLORS
 
@@ -160,7 +164,7 @@ def gameplay(screen, context):
                  , pygame.mixer.Sound("sounds/hitsound_normal.wav")
                  ]
 
-    for hitsound, volume in zip(hitsounds, [0.02, 0.04, 0.04, 0.04, 0.02]):
+    for hitsound, volume in zip(hitsounds, [0.05, 0.1, 0.1, 0.1, 0.05]):
         hitsound.set_volume(volume)
 
     music_volume_raw = 0.08
@@ -229,7 +233,7 @@ def gameplay(screen, context):
                 codename + "000" + str(i) + ".png",
             ).convert_alpha()
             for i in range(4)
-        ] for codename in ["Jnote", "Dnote", "Fnote", "Knote", "idle"]
+        ] for codename in ["Dnote", "Fnote", "Jnote", "Knote", "idle"]
     ]
     guy_animations = [
         [
@@ -247,6 +251,19 @@ def gameplay(screen, context):
         for anim in guy_animations
     ]
 
+    # @Note: Hit object sprites. Pre-scaled once to the note's on-screen diameter so draw.py
+    #         sees an identity transform and just blits them.
+    HIT_OBJECT_DIAMETER = HIT_OBJECT_RADIUS * 2.2
+    note_images = [
+        pygame.transform.smoothscale(
+            pygame.image.load("assets/" + key_name + "-note.png").convert_alpha(),
+            (HIT_OBJECT_DIAMETER, HIT_OBJECT_DIAMETER),
+        ) for key_name in ["D", "F", "J", "K"]
+    ]
+    # Rebuilt every frame from the hit objects on screen; drawn on top of `game`.
+    note_entities: List[entity.Entity] = []
+    notes_layer = entity.Container(pos = (0, 0), transformation = (1, 1, 0), entities = note_entities)
+
     art_entities: List[entity.Entity] = [
         background,
         guy,
@@ -254,6 +271,7 @@ def gameplay(screen, context):
 
     game_entities: List[entity.Entity] = [
         game,
+        notes_layer,
         auto_text,
         score_text,
         combo_text,
@@ -510,22 +528,22 @@ def gameplay(screen, context):
 
         pygame.draw.rect(
             game.image,
-            pygame.Color((0, 0, 0, 200)),
-            (track_pos_x + -1.5 * COLUMN_GAP - HIT_OBJECT_RADIUS - 8, 0, 3 * COLUMN_GAP + 2 * HIT_OBJECT_RADIUS + 16, SCREEN_HEIGHT),
+            pygame.Color((0, 0, 0, 155)),
+            (track_pos_x + -1.5 * COLUMN_GAP - HIT_OBJECT_RADIUS - 16, 0, 3 * COLUMN_GAP + 2 * HIT_OBJECT_RADIUS + 32, SCREEN_HEIGHT),
         )
 
         for column_track_i in range(4):
             pygame.draw.rect(
                 game.image,
-                pygame.Color((0, 0, 0)),
+                pygame.Color((0, 0, 0, 200)),
                 (track_pos_x + (column_track_i - 1.5) * COLUMN_GAP - HIT_OBJECT_RADIUS, 0, (HIT_OBJECT_RADIUS * 2), HITBAR_Y),
             )
 
         # @Note: Draw BPM guide lines.
         bpm_line_pos_y = ((HITBAR_Y - (HITBAR_Y)) + (time / 2 * bps) * (HITBAR_Y)) % HITBAR_Y
-        bpm_line_pos_x_start = track_pos_x + -1.5 * COLUMN_GAP - HIT_OBJECT_RADIUS - 8
-        bpm_line_pos_x_end   = bpm_line_pos_x_start + 3 * COLUMN_GAP + 2 * HIT_OBJECT_RADIUS + 16
-        pygame.draw.line(game.image, pygame.Color("gray20"), (bpm_line_pos_x_start, bpm_line_pos_y), (bpm_line_pos_x_end, bpm_line_pos_y), 16)
+        bpm_line_pos_x_start = track_pos_x + -1.5 * COLUMN_GAP - HIT_OBJECT_RADIUS - 16
+        bpm_line_pos_x_end   = bpm_line_pos_x_start + 3 * COLUMN_GAP + 2 * HIT_OBJECT_RADIUS + 32
+        pygame.draw.line(game.image, pygame.Color("gray20"), (bpm_line_pos_x_start, bpm_line_pos_y), (bpm_line_pos_x_end, bpm_line_pos_y), 8)
 
         for key, hit_lighting in filter(lambda xs: xs[1] is None, enumerate(hit_lightings)):
             pygame.draw.circle(
@@ -535,6 +553,7 @@ def gameplay(screen, context):
                 HIT_OBJECT_RADIUS,
             )
 
+        note_entities.clear()
         for hit_object in hit_objects:
             SPEED = 1800
             pos   = HITBAR_Y - (hit_object.timestamp - time) * SPEED
@@ -542,8 +561,8 @@ def gameplay(screen, context):
             if pos < -HIT_OBJECT_RADIUS:
                 break
 
-            primary_color     = HIT_OBJECT_COLORS[hit_object.key]
             secondary_color   = HIT_OBJECT_COLORS_ALT[hit_object.key]
+            note_x            = round(track_pos_x + (hit_object.key - 1.5) * COLUMN_GAP)
 
             is_long_note = hit_object.end_time > 0.0
 
@@ -559,22 +578,16 @@ def gameplay(screen, context):
                      HIT_OBJECT_RADIUS * 2, height)
                 )
 
-            pygame.draw.circle(
-                game.image,
-                primary_color,
-                (track_pos_x + (hit_object.key - 1.5) * COLUMN_GAP, pos - int(hit_object.end_time * SPEED)),
-                HIT_OBJECT_RADIUS,
-            )
+            # The far end of the note (for a short note that is the note itself).
+            note_entities.append(entity.Image(
+                (note_x, round(pos - hit_object.end_time * SPEED)), (1, 1, 0), note_images[hit_object.key], True))
 
             if not is_long_note or (pos > HITBAR_Y and keys_state[hit_object.key] == KeyState.PRESSED):
                 continue
 
-            pygame.draw.circle(
-                game.image,
-                primary_color,
-                (track_pos_x + (hit_object.key - 1.5) * COLUMN_GAP, pos),
-                HIT_OBJECT_RADIUS,
-            )
+            # The head of a long note.
+            note_entities.append(entity.Image(
+                (note_x, round(pos)), (1, 1, 0), note_images[hit_object.key], True))
 
         for key, hit_lighting in filter(lambda xs: xs[1] is not None, enumerate(hit_lightings)):
             h, s, v, a = HIT_LIGHTING_COLORS[hit_lighting.grade].hsva
