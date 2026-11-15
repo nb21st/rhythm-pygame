@@ -75,6 +75,20 @@ HIT_OBJECT_COLORS_ALT = [pygame.Color.from_hsla(h, s * 0.5, l * 0.5, a) for h, s
 
 HIT_LIGHTING_COLORS = JUDGEMENT_COLORS + HIT_OBJECT_COLORS
 
+MEH_TIMING     = 0.150
+OK_TIMING      = 0.100
+GOOD_TIMING    = 0.066
+GREAT_TIMING   = 0.044
+PERFECT_TIMING = 0.033
+
+def judgeTiming(diff: float) -> Judgement:
+    """Grade a hit by how far (in seconds) it was from the note's head/tail."""
+    if   diff < PERFECT_TIMING: return Judgement.PERFECT
+    elif diff < GREAT_TIMING:   return Judgement.GREAT
+    elif diff < GOOD_TIMING:    return Judgement.GOOD
+    elif diff < OK_TIMING:      return Judgement.OK
+    else:                       return Judgement.MEH
+
 def gameplay(screen, context):
     next_scene = scenes.chartSelection
     beatmapset_filename, beatmap_filename, beatmap_id = context
@@ -133,12 +147,6 @@ def gameplay(screen, context):
 
     game_end = False
 
-    MEH_TIMING     = 0.150
-    OK_TIMING      = 0.100
-    GOOD_TIMING    = 0.066
-    GREAT_TIMING   = 0.044
-    PERFECT_TIMING = 0.033
-
     song_length         = 0.0
     song_length_minutes = 0
     song_length_seconds = 0
@@ -152,7 +160,7 @@ def gameplay(screen, context):
                  , pygame.mixer.Sound("sounds/hitsound_normal.wav")
                  ]
 
-    for hitsound, volume in zip(hitsounds, [0.05, 0.1, 0.1, 0.1, 0.05]):
+    for hitsound, volume in zip(hitsounds, [0.02, 0.04, 0.04, 0.04, 0.02]):
         hitsound.set_volume(volume)
 
     music_volume_raw = 0.08
@@ -221,7 +229,7 @@ def gameplay(screen, context):
                 codename + "000" + str(i) + ".png",
             ).convert_alpha()
             for i in range(4)
-        ] for codename in ["Dnote", "Fnote", "Jnote", "Knote", "idle"]
+        ] for codename in ["Jnote", "Dnote", "Fnote", "Knote", "idle"]
     ]
     guy_animations = [
         [
@@ -266,6 +274,15 @@ def gameplay(screen, context):
         ),
     ]
 
+    # @Note: Guy animation state. Priority: short-note animation > held long note > idle.
+    #        A short-note animation lasts guy_animation_durations[key]; a hold animation lasts
+    #        exactly as long as a long note is actually being held (head hit, key still down).
+    guy_state           = guy_state_id.IDLE
+    guy_short_key       = None
+    guy_short_time_left = 0.0
+    guy_hold_key        = None
+    dropped_holds       = set()  # id()s of long notes whose hold was broken (released early)
+
     clock.tick()
 
     while running:
@@ -283,8 +300,6 @@ def gameplay(screen, context):
                             auto = not auto
                         case pygame.K_F1:
                             debug_state.level = (debug_state.level + 1) % debug_state.count
-                case custom_event.IDLE_GUY:
-                    guy.animation = guy_animations[guy_state_id.IDLE]
 
         delta_time_s = clock.tick(GAMEPLAY_FPS_LIMIT) / 1000
         if pygame.mixer.music.get_busy() and not rewinding:
@@ -369,50 +384,60 @@ def gameplay(screen, context):
                 hit_lightings[key] = hit_lighting
 
         # @Note: Instead of deleting, we can use base index and keep the previous objects. This will make rewinding easier.
-        hit_object_deletes = []
-        key_hits = [False, False, False, False]
+        hit_object_deletes  = []
+        key_hits            = [False, False, False, False]
+        held_keys           = []  # columns with a long note being held this frame
+        guy_restart         = False
+        guy_short_time_left = max(0.0, guy_short_time_left - delta_time_s)
+
         for hit_object in hit_objects:
-            begin_diff = abs(hit_object.timestamp - time)
-            end_diff   = abs(hit_object.timestamp + hit_object.end_time - time)
-            grade      = None
+            key         = hit_object.key
+            state       = keys_state[key]
+            is_long     = hit_object.end_time > 0
+            end_time    = hit_object.timestamp + hit_object.end_time
+            begin_diff  = abs(hit_object.timestamp - time)
+            end_diff    = abs(end_time - time)
+            key_is_down = state == KeyState.JUST_PRESSED or state == KeyState.PRESSED
+            key_is_free = not key_hits[key]  # one hit per key per frame
+            grade       = None
 
-            is_long_note = hit_object.end_time > 0
-            just_released_end = keys_state[hit_object.key] == KeyState.JUST_RELEASED and end_diff <= MEH_TIMING and not key_hits[hit_object.key]
-
-            if (keys_state[hit_object.key] == KeyState.JUST_PRESSED and begin_diff <= MEH_TIMING and
-                hit_object.pressed == False and not key_hits[hit_object.key]):
-                if   begin_diff < PERFECT_TIMING: grade = Judgement.PERFECT
-                elif begin_diff < GREAT_TIMING:   grade = Judgement.GREAT
-                elif begin_diff < GOOD_TIMING:    grade = Judgement.GOOD
-                elif begin_diff < OK_TIMING:      grade = Judgement.OK
-                else:                             grade = Judgement.MEH
+            if (state == KeyState.JUST_PRESSED and begin_diff <= MEH_TIMING and
+                not hit_object.pressed and key_is_free):
+                # Head of the note (the whole note, if it is a short one).
+                grade = judgeTiming(begin_diff)
 
                 # @Note: Preventing holds object button mashing exploit.
                 hit_object.pressed = True
-
-                if hit_object.end_time == 0:
+                key_hits[key] = True
+                if is_long:
+                    held_keys.append(key)
+                else:
                     hit_object_deletes.append(hit_object)
-                key_hits[hit_object.key] = True
-            elif is_long_note and just_released_end:
-                if   end_diff < PERFECT_TIMING: grade = Judgement.PERFECT
-                elif end_diff < GREAT_TIMING:   grade = Judgement.GREAT
-                elif end_diff < GOOD_TIMING:    grade = Judgement.GOOD
-                elif end_diff < OK_TIMING:      grade = Judgement.OK
-                else:                           grade = Judgement.MEH
 
+            elif (is_long and hit_object.pressed and state == KeyState.JUST_RELEASED and
+                  end_diff <= MEH_TIMING and key_is_free):
+                # Tail of a long note whose head was hit.
+                grade = judgeTiming(end_diff)
                 hit_object_deletes.append(hit_object)
-                key_hits[hit_object.key] = True
-            elif (hit_object.timestamp + hit_object.end_time) < time - MEH_TIMING:
+                key_hits[key] = True
+
+            elif end_time < time - MEH_TIMING:
                 grade = Judgement.MISS
                 hit_object_deletes.append(hit_object)
-            elif (time + 0.1 >= hit_object.timestamp and hit_object.end_time > 0 and
-                  (keys_state[hit_object.key] == KeyState.JUST_PRESSED or keys_state[hit_object.key] == KeyState.PRESSED)):
-                hit_lightings[hit_object.key] = HitLighting(Judgement.NONE + 1 + hit_object.key, 1.0)
 
-                continue
-            elif hit_object.timestamp - time > MEH_TIMING:
-                break
             else:
+                # Not judged this frame. A long note counts as *held* only if its own head was
+                # hit and the key is still down; letting go early breaks the hold for good,
+                # pressing the key again does not revive it.
+                if is_long and hit_object.pressed and id(hit_object) not in dropped_holds:
+                    if key_is_down:
+                        held_keys.append(key)
+                        hit_lightings[key] = HitLighting(Judgement.NONE + 1 + key, 1.0)
+                    else:
+                        dropped_holds.add(id(hit_object))
+
+                if hit_object.timestamp - time > MEH_TIMING:
+                    break
                 continue
 
             combo += 1
@@ -437,18 +462,37 @@ def gameplay(screen, context):
             accuracy     = accuracy_n / accuracy_d
 
             hit_lighting = HitLighting(grade, 1.0)
-            hit_lightings[hit_object.key] = hit_lighting
-            
+            hit_lightings[key] = hit_lighting
+
             judgement_feedback = copy(hit_lighting)
             judgement_feedback.lifetime = 3.0
 
-            guy.animation = guy_animations[hit_object.key]
-            if not is_long_note or (is_long_note and just_released_end):
-                pygame.time.set_timer(custom_event.IDLE_GUY, guy_animation_durations[hit_object.key], 1)
-            else:
-                pygame.time.set_timer(custom_event.IDLE_GUY, 0)
+            # @Note: Only a *hit* short note triggers its (timed) animation. Long-note heads start
+            #        the hold animation through `held_keys`, and tails/misses just end it.
+            if not is_long and grade < Judgement.MISS:
+                guy_short_key       = key
+                guy_short_time_left = guy_animation_durations[key] / 1000
+                guy_restart         = True
 
         hit_objects = list(filter(lambda x: x not in hit_object_deletes, hit_objects))
+
+        # @Section: Guy
+        # Keep showing the same held note while it is still held, otherwise pick the latest one.
+        if guy_hold_key not in held_keys:
+            guy_hold_key = held_keys[-1] if held_keys else None
+
+        if guy_short_time_left > 0.0:
+            guy_wanted_state = guy_short_key
+        elif guy_hold_key is not None:
+            guy_wanted_state = guy_hold_key
+        else:
+            guy_wanted_state = guy_state_id.IDLE
+
+        if guy_restart or guy_wanted_state != guy_state:
+            guy_state       = guy_wanted_state
+            guy.animation   = guy_animations[guy_state]
+            guy.frame_index = 0
+            guy.excess_ms   = 0
 
         # @Section: Draw
 
