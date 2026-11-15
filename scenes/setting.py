@@ -15,6 +15,9 @@ from utils import *
 def setting(screen, context):
     next_scene = None
     small_font = pygame.font.Font(None, 96)
+    topic_font = pygame.font.Font(None, 180) #หัวข้อ setting
+    label_font = pygame.font.Font(None, 80) #label การกระทำ
+    back_font = pygame.font.Font(None, 67) #label กลับ
     clock = pygame.time.Clock()
     running = True
 
@@ -47,8 +50,9 @@ def setting(screen, context):
             transformation = (1, 1, 0),
             entities = [
                 entity.CircleButton((228, 228), 128, id=button),
-                entity.Rect((100, 100),(256, 256),DARK_BACKGROUND_COLOR),
-                entity.Text((228, 228),small_font,display_key,outline_width=6,center=True),
+                entity.Circle((228, 228), 120, DARK_BACKGROUND_COLOR), #แก้เป็นวงกลมเพราะฉันชอบแบบนี้ ฮ่าๆๆๆๆ
+                entity.Text((228, 65), label_font, f"KEY {key_id + 1}",(240, 60, 27),(94, 56, 42), outline_width=4, center=True), #label key id ของแต่ละช่อง
+                entity.Text((228, 228),small_font,display_key,(255, 197, 0),(94, 56, 42), outline_width=6,center=True),
             ]
         )
 
@@ -71,6 +75,13 @@ def setting(screen, context):
             entity.Image((0, 0),(0.6, 0.6, 90),arrow_png,True),
         ],
     )
+
+    topic_setting = entity.Text((SCREEN_WIDTH // 2, 160), topic_font, "Setting", outline_width=8, center=True)
+    label_guide  = entity.Text((SCREEN_WIDTH // 2, 550), label_font, "WTF", outline_width=4, center=True)
+    #แถว 80 แม่งดูไร้ประโยชน์แต่ถ้าลบแม่งจะรันไม่ได้ ไรวะ
+    go_back  = entity.Text((SCREEN_WIDTH // 8, 100), back_font, "back",(94, 56, 42), outline_width=0, center=True)
+    #ตัวอักษร ofc
+
     entities = [
         outer_background,
         inner_background,
@@ -78,7 +89,10 @@ def setting(screen, context):
         Key1_binder,
         Key2_binder,
         Key3_binder,
-        Key4_binder
+        Key4_binder,
+        topic_setting, 
+        label_guide,
+        go_back
     ]
 
     entities_text = "[\n"
@@ -150,6 +164,14 @@ def setting(screen, context):
         entities[4] = create_key_binder(100 + pos1, key_id.KEY2, button_id.KEY2_KEYBIND)
         entities[5] = create_key_binder(100 + pos1 * 2, key_id.KEY3, button_id.KEY3_KEYBIND)
         entities[6] = create_key_binder(100 + pos1 * 3, key_id.KEY4, button_id.KEY4_KEYBIND)
+
+        if waiting_for_key_id is None:
+            label_msg = "Click to change key"
+        else:
+            label_msg = f"Press any key for KEY {waiting_for_key_id + 1} (ESC to cancel)"
+        entities[8] = entity.Text((SCREEN_WIDTH // 2, 470), label_font, label_msg, (94, 56, 42), outline_width=0, center=True)
+        #เปลี่ยนคำใน label ตอนที่มีการเปลี่ยน key (ไอบรรทัด 80)
+        
         lerp.processTransformationEvents(transformation_events,delta_time_s)
         drawEntities(screen,entities,(-camera_pos.x, -camera_pos.y))
 
