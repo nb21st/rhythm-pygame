@@ -41,6 +41,13 @@ judgement_text = [
     "",
 ]
 
+class guy_state_id(IntEnum):
+    DNOTE = 0
+    FNOTE = auto()
+    JNOTE = auto()
+    KNOTE = auto()
+    IDLE  = auto()
+
 class KeyState(IntEnum):
     JUST_PRESSED  = 0
     PRESSED       = auto()
@@ -126,7 +133,6 @@ def gameplay(screen, context):
 
     game_end = False
 
-    # @Todo: Figure out how to implement difficulty.
     MEH_TIMING     = 0.150
     OK_TIMING      = 0.100
     GOOD_TIMING    = 0.066
@@ -137,7 +143,7 @@ def gameplay(screen, context):
     song_length_minutes = 0
     song_length_seconds = 0
 
-    pygame.mixer.set_num_channels(64)
+    pygame.mixer.set_num_channels(32)
 
     hitsounds  = [ pygame.mixer.Sound("sounds/hitsound_alt.wav")
                  , pygame.mixer.Sound("sounds/hitsound_whistle.wav")
@@ -201,15 +207,41 @@ def gameplay(screen, context):
     )
 
     auto_text = entity.Text((SCREEN_WIDTH - 134, SCREEN_HEIGHT - 48), big_font, "")
-    score_text = entity.Text((track_pos_x + 220, SCREEN_HEIGHT - 128 + 00), big_font, "")
-    combo_text = entity.Text((track_pos_x + 220, SCREEN_HEIGHT - 128 + 48), big_font, "")
-    accuracy_text = entity.Text((track_pos_x + 220, SCREEN_HEIGHT - 128 + 96), small_font, "")
+    score_text = entity.Text((track_pos_x + 240, SCREEN_HEIGHT - 128 + 00), big_font, "")
+    combo_text = entity.Text((track_pos_x + 240, SCREEN_HEIGHT - 128 + 48), big_font, "")
+    accuracy_text = entity.Text((track_pos_x + 240, SCREEN_HEIGHT - 128 + 96), small_font, "")
     time_text = entity.Text((8, SCREEN_HEIGHT - 32), small_font, "")
     combo_feedback_text = entity.Text((track_pos_x, SCREEN_HEIGHT // 2), big_font, "", center=True)
     grade_feedback_text = entity.Text((track_pos_x, SCREEN_HEIGHT // 2 - 48), big_font, "", center=True)
 
+    guy_animations = [
+        [
+            pygame.image.load(
+                "assets/" + codename + "000" + str(i) + ".png",
+                codename + "000" + str(i) + ".png",
+            ).convert_alpha()
+            for i in range(4)
+        ] for codename in ["Dnote", "Fnote", "Jnote", "Knote", "idle"]
+    ]
+    guy_animations = [
+        [
+            pygame.transform.flip(img, flip, False)
+            for img in anim
+        ] for anim, flip in zip(guy_animations, [True, False, True, False, False])
+    ]
+    guy = entity.Animation(
+        pos = (800, 200),
+        transformation = (1, 1, 0),
+        animation = guy_animations[guy_state_id.IDLE],
+    )
+    guy_animation_durations = [
+        guy.delay_ms * len(anim)
+        for anim in guy_animations
+    ]
+
     art_entities: List[entity.Entity] = [
         background,
+        guy,
     ]
 
     game_entities: List[entity.Entity] = [
@@ -251,6 +283,8 @@ def gameplay(screen, context):
                             auto = not auto
                         case pygame.K_F1:
                             debug_state.level = (debug_state.level + 1) % debug_state.count
+                case custom_event.IDLE_GUY:
+                    guy.animation = guy_animations[guy_state_id.IDLE]
 
         delta_time_s = clock.tick(GAMEPLAY_FPS_LIMIT) / 1000
         if pygame.mixer.music.get_busy() and not rewinding:
@@ -308,7 +342,7 @@ def gameplay(screen, context):
         # @Note: That's right. We're gonna cheat.
         if auto:
             for hit_object in hit_objects:
-                margin = PERFECT_TIMING / 3 * 2
+                margin = PERFECT_TIMING
                 begin_diff = abs(hit_object.timestamp - time)
                 end_diff   = abs(hit_object.timestamp + hit_object.end_time - time)
 
@@ -342,6 +376,9 @@ def gameplay(screen, context):
             end_diff   = abs(hit_object.timestamp + hit_object.end_time - time)
             grade      = None
 
+            is_long_note = hit_object.end_time > 0
+            just_released_end = keys_state[hit_object.key] == KeyState.JUST_RELEASED and end_diff <= MEH_TIMING and not key_hits[hit_object.key]
+
             if (keys_state[hit_object.key] == KeyState.JUST_PRESSED and begin_diff <= MEH_TIMING and
                 hit_object.pressed == False and not key_hits[hit_object.key]):
                 if   begin_diff < PERFECT_TIMING: grade = Judgement.PERFECT
@@ -356,9 +393,7 @@ def gameplay(screen, context):
                 if hit_object.end_time == 0:
                     hit_object_deletes.append(hit_object)
                 key_hits[hit_object.key] = True
-            elif (hit_object.end_time > 0 and
-                  keys_state[hit_object.key] == KeyState.JUST_RELEASED and end_diff <= MEH_TIMING and
-                  not key_hits[hit_object.key]):
+            elif is_long_note and just_released_end:
                 if   end_diff < PERFECT_TIMING: grade = Judgement.PERFECT
                 elif end_diff < GREAT_TIMING:   grade = Judgement.GREAT
                 elif end_diff < GOOD_TIMING:    grade = Judgement.GOOD
@@ -403,8 +438,15 @@ def gameplay(screen, context):
 
             hit_lighting = HitLighting(grade, 1.0)
             hit_lightings[hit_object.key] = hit_lighting
+            
             judgement_feedback = copy(hit_lighting)
             judgement_feedback.lifetime = 3.0
+
+            guy.animation = guy_animations[hit_object.key]
+            if not is_long_note or (is_long_note and just_released_end):
+                pygame.time.set_timer(custom_event.IDLE_GUY, guy_animation_durations[hit_object.key], 1)
+            else:
+                pygame.time.set_timer(custom_event.IDLE_GUY, 0)
 
         hit_objects = list(filter(lambda x: x not in hit_object_deletes, hit_objects))
 
@@ -416,7 +458,7 @@ def gameplay(screen, context):
         sawtooth_color_light   = pygame.Color((255, 255, 255))
         sawtooth_color_dark    = pygame.Color((255, 255, 255))
         sawtooth_color_light.a = 100 + int(sawtooth_visual_wave * 155)
-        sawtooth_color_dark.a  = 55 + int(sawtooth_visual_wave * 35r)
+        sawtooth_color_dark.a  = 55 + int(sawtooth_visual_wave * 35)
         sawtooth_color_light   = sawtooth_color_light.premul_alpha()
         sawtooth_color_dark    = sawtooth_color_dark.premul_alpha()
         sawtooth_color_light.a = 255
@@ -523,8 +565,8 @@ def gameplay(screen, context):
             grade_feedback_text.content = judgement_text[judgement_feedback.grade]
             combo_feedback_text.content = str(combo)
 
-        pygame.draw.line(game.image, (0, 0, 0),   (track_pos_x + 240, SCREEN_HEIGHT // 2 + 400), (track_pos_x + 240, SCREEN_HEIGHT // 2), 32)
-        pygame.draw.line(game.image, (200, 0, 0), (track_pos_x + 240, SCREEN_HEIGHT // 2 + 398), (track_pos_x + 240, SCREEN_HEIGHT // 2 + 2 + 400 * ((100 - health) / 100)), 28)
+        pygame.draw.line(game.image, (0, 0, 0),   (track_pos_x + 260, SCREEN_HEIGHT // 2 + 400), (track_pos_x + 260, SCREEN_HEIGHT // 2), 32)
+        pygame.draw.line(game.image, (200, 0, 0), (track_pos_x + 260, SCREEN_HEIGHT // 2 + 398), (track_pos_x + 260, SCREEN_HEIGHT // 2 + 2 + 400 * ((100 - health) / 100)), 28)
 
         cramped_time  = cramp(time, 0, song_length)
         cramped_time_minutes = math.trunc(cramped_time / 60)

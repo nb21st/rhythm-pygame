@@ -22,6 +22,7 @@ debug_state = DebugState()
 
 class custom_event:
     QUIT_SCENE = pygame.event.custom_type()
+    IDLE_GUY = pygame.event.custom_type()
 
 # @Note: This function actually exists in pygame.math but this is more fun.
 def cramp(x, mn, mx): return min(max(x, mn), mx)
