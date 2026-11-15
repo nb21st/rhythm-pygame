@@ -19,12 +19,12 @@ def mainMenu(screen, context):
     big_font = pygame.font.Font(None, 128)
 
     class button_id(IntEnum):
-        MAIN_MENU_NEXT       = 0
-        MAIN_MENU_PREV       = auto()
-        MAIN_MENU_PLAY       = auto()
-        MAIN_MENU_SETTING    = auto()
-        MAIN_MENU_EXIT       = auto()
-        COUNT                = auto()
+        MAIN_MENU_NEXT    = 0
+        MAIN_MENU_PREV    = auto()
+        MAIN_MENU_PLAY    = auto()
+        MAIN_MENU_SETTING = auto()
+        MAIN_MENU_EXIT    = auto()
+        COUNT             = auto()
 
     camera_pos = entity.Position2(0, -1080 * 2)
     outer_background = entity.BackgroundColor(DARK_BACKGROUND_COLOR)

@@ -4,6 +4,12 @@
 #     current scene ended and returned the next scene. Otherwise, the game is ended.
 #     Although, the game typically ended with sys.exit().
 #
+import ctypes
+try:
+    ctypes.windll.user32.SetProcessDPIAware()
+except Exception:
+    pass
+#ทำให้จอฉันไม่ใหญ่ ToT
 
 import pygame
 import scenes.scenes as scenes

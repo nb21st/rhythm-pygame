@@ -46,7 +46,7 @@ def directory_preview(directory_name):
     res: list[Beatmapset] = []
     for archive in Path(directory_name).glob("*.osz"):
         beatmapset_filename = archive.name
-        beatmaps = list(zipfile.Path(directory_name + "/" + beatmapset_filename).glob("*.osu"))
+        beatmaps = [p for p in zipfile.Path(directory_name + "/" + beatmapset_filename).iterdir() if p.name.endswith(".osu")] #แก้ไปหน้าต่อไปไม่ได้ของฉัน
         sample_beatmap_filename = beatmaps[0].name
         title  = loadSpecific(directory_name, beatmapset_filename, sample_beatmap_filename, "Title")
         artist = loadSpecific(directory_name, beatmapset_filename, sample_beatmap_filename, "Artist")

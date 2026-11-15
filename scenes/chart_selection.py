@@ -26,8 +26,8 @@ def chartSelection(screen, context):
         CHART_PREV    = auto()
         CHART_NEXT    = auto()
         CHART_SELECT  = auto()
-        VERSION_PREV = auto()
-        VERSION_NEXT = auto()
+        VERSION_PREV  = auto()
+        VERSION_NEXT  = auto()
         CHART_PLAY    = auto()
         COUNT         = auto()
 
@@ -40,9 +40,6 @@ def chartSelection(screen, context):
         current_chart_index = (current_chart_index + amount) % charts_count
     def chart_dec(amount=1): chart_inc(-amount)
     def get_current_chart(): return charts[current_chart_index]
-    def get_current_chart_text():
-        current_chart = get_current_chart()
-        return current_chart.title + "\nby " + current_chart.artist
 
     versions = get_current_chart().versions
     versions_count = len(versions)
@@ -98,28 +95,78 @@ def chartSelection(screen, context):
             entity.CircleButton((0, 0), 64, id=button_id.CHART_NEXT),
             next_arrow_image,
         ],
-        visible = bool(charts_count),
+        visible = charts_count > 1, #แก้ แสดงปุ่มแค่ตอนมีเพลงให้เลื่อนต่อ
     )
+
+    select_arrow_image = entity.Image((0, 0), (0.6, 0.6, 90), arrow_png, True)
     chart_select_arrow = entity.Container(
         pos = (SCREEN_WIDTH - 512 - 256, SCREEN_HEIGHT // 2),
         transformation = (1, 1, 0),
         entities = [
             entity.CircleButton((0, 0), 64, id=button_id.CHART_SELECT),
-            entity.Image((0, 0), (0.6, 0.6, 90), arrow_png, True)
+            select_arrow_image,
         ],
-        visible = True,
+        visible = bool(charts_count),
     )
+    is_chart_selected = False
+
+    # ==================== [จัดลิ้นชักเอียงโค้งฝั่งขวา และเว้นระยะห่างแต่ละชั้น] ====================
     linchuck_png = pygame.image.load("assets/linchuck.png", "linchuck.png").convert_alpha()
-    linchuck_image = entity.Image((-80, 0), (0.8, 0.8, 0), linchuck_png, True)
-    current_chart_text = entity.Text((-280, -32), pygame.font.Font(None, 42), get_current_chart_text())
+    drawer_gap   = max(175, int(linchuck_png.get_height() * 0.8) + 4)  #ระยะห่างลิ้นชัก
+    curve_step_x = 75                                                  #ความเอียงตอนเปลี่ยนลิ้นชัก
+    drawer_font  = pygame.font.Font(None, 50)
+
+    drawer_containers = []
+    drawer_texts = []
+    drawer_target_positions = []
+
+    for i, chart in enumerate(charts):
+        dist = i - current_chart_index
+        is_selected = (dist == 0)
+        # ชั้นที่เลือกยื่นซ้ายสุด (-40) ชั้นบนและล่างเอียงโค้งถอยไปทางขวาตามระยะห่าง
+        start_x  = -40 if is_selected else abs(dist) * curve_step_x
+        start_y  = dist * drawer_gap
+        text_str = (chart.title + "\nby " + chart.artist) if is_selected else chart.title
+        text_y   = -32 if is_selected else -16
+
+        txt_entity = entity.Text((-280, text_y), drawer_font, text_str,(255, 197, 0),(94, 56, 42), outline_width=6) #เปลี่ยนสีฟ้อนเพลงในลิ้นชัก
+        drawer_box = entity.Container(
+            pos = (start_x, start_y),
+            transformation = (1, 1, 0),
+            entities = [
+                entity.Image((-80, 0), (0.8, 0.8, 0), linchuck_png, True),
+                txt_entity,
+            ],
+        )
+        drawer_containers.append(drawer_box)
+        drawer_texts.append(txt_entity)
+        drawer_target_positions.append((start_x, start_y))
+
+    def refresh_linchuck_stack():
+        for i, chart in enumerate(charts):
+            dist = i - current_chart_index
+            is_selected = (dist == 0)
+
+            drawer_texts[i].content = (chart.title + "\nby " + chart.artist) if is_selected else chart.title
+            drawer_texts[i].pos = (-280, -32 if is_selected else -16)
+
+            if is_selected:
+                # ดึงออกมาเฉพาะลิ้นชักที่ถูกเลือกอันเดียว! (-240 ตอนเปิด, -40 ตอนเก็บ)
+                target_x = -240 if is_chart_selected else -40
+            else:
+                # ลิ้นชักอันอื่นยังคงเรียงเอียงโค้งอยู่ที่ฝั่งขวาเหมือนเดิม
+                target_x = abs(dist) * curve_step_x + (30 if is_chart_selected else 0)
+
+            target_y = dist * drawer_gap
+            drawer_target_positions[i] = (target_x, target_y)
+
     current_chart_display = entity.Container(
         pos = (SCREEN_WIDTH - 256, SCREEN_HEIGHT // 2),
         transformation = (1, 1, 0),
-        entities = [
-            linchuck_image,
-            current_chart_text,
-        ],
+        entities = drawer_containers,
     )
+    # ===================================================================================================
+
     paper_png    = pygame.image.load("assets/paper.png", "paper.png").convert_alpha()
     play_png     = pygame.image.load("assets/play.png", "play.png").convert_alpha()
     paper_image  = entity.Image((500, 540), (1, 1, 0), paper_png, True)
@@ -158,6 +205,11 @@ def chartSelection(screen, context):
         visible = False,
     )
 
+    title_font      = pygame.font.Font(None, 128)
+    back_label_font = pygame.font.Font(None, 67)
+    selecting_title = entity.Text((SCREEN_WIDTH // 2, 110), title_font, "Selecting", outline_width=6, center=True)
+    back_label      = entity.Text((SCREEN_WIDTH // 8, 100), back_label_font, "back",(94, 56, 42), outline_width=0, center=True)
+
     transition = entity.Circle((SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2), 0, (0, 0, 0))
 
     entities: List[entity.Entity] = [
@@ -166,6 +218,8 @@ def chartSelection(screen, context):
         current_chart_display,
         current_chart_info,
         decoration,
+        selecting_title,
+        back_label,
         chart_back_arrow,
         chart_prev_arrow,
         chart_next_arrow,
@@ -215,61 +269,121 @@ def chartSelection(screen, context):
 
         if button_clicks[button_id.CHART_BACK]:
             transformation_events.append(
-                    lerp.TransformationEvent(
-                        camera_pos,
-                        copy(camera_pos),
-                        entity.Position2(-1080 * 10, 0),
-                        pytweening.easeInOutCirc,
-                        1.0,
-                    )
+                lerp.TransformationEvent(
+                    camera_pos,
+                    copy(camera_pos),
+                    entity.Position2(-1080 * 10, 0),
+                    pytweening.easeInOutCirc,
+                    1.0,
+                )
             )
             next_scene = scenes.mainMenu
             pygame.time.set_timer(custom_event.QUIT_SCENE, 500, 1)
         elif button_clicks[button_id.CHART_PREV]:
             chart_dec()
-            current_chart_text.content = get_current_chart_text()
+            refresh_linchuck_stack()
             chart_prev_arrow.visible = current_chart_index > 0
             chart_next_arrow.visible = True
         elif button_clicks[button_id.CHART_NEXT]:
             chart_inc()
-            current_chart_text.content = get_current_chart_text()
+            refresh_linchuck_stack()
             chart_prev_arrow.visible = True
             chart_next_arrow.visible = current_chart_index < charts_count - 1
+
+        # ==================== [ก้อนที่ 2: กดปุ่มแล้วดึงลิ้นชักออกมาแค่อันเดียว (ไม่ย้ายทั้งแผง)] ====================
         elif button_clicks[button_id.CHART_SELECT]:
-            update_versions()
-            version_text.content = get_current_version_text()
-            chart_prev_arrow.visible   = False
-            chart_next_arrow.visible   = False
-            chart_select_arrow.visible = False
-            version_prev_arrow.visible = False
-            version_next_arrow.visible = True
-            transformation_events.append(
-                lerp.TransformationEvent(
-                    current_chart_display,
-                    copy(current_chart_display),
-                    entity.Container(
-                        pos = (SCREEN_WIDTH - 512, SCREEN_HEIGHT // 2),
-                        transformation = (1, 1, 0),
-                        entities = current_chart_display.entities
-                    ),
-                    pytweening.easeOutExpo,
-                    0.5,
+            is_chart_selected = not is_chart_selected
+            refresh_linchuck_stack()  # สั่งอัปเดตให้ดึงออกหรือเก็บกลับเฉพาะลิ้นชักที่เลือก
+
+            if is_chart_selected:
+                current_version_index = 0
+                update_versions()
+                version_text.content = get_current_version_text()
+                chart_prev_arrow.visible   = False
+                chart_next_arrow.visible   = False
+                chart_select_arrow.visible = True
+                version_prev_arrow.visible = False
+                version_next_arrow.visible = versions_count > 1
+
+                transformation_events.append(
+                    lerp.TransformationEvent(
+                        select_arrow_image,
+                        copy(select_arrow_image),
+                        entity.Image((0, 0), (0.6, 0.6, -90), arrow_png, True),
+                        pytweening.easeOutBack,
+                        0.35,
+                    )
                 )
-            )
-            current_chart_info.visible = True
-            transformation_events.append(
-                lerp.TransformationEvent(
-                    current_chart_info,
-                    copy(current_chart_info),
-                    entity.Container(
-                        pos = (0, 0),
-                        transformation = (1, 1, 0),
-                        entities = current_chart_info.entities
-                    ),
-                    pytweening.easeOutExpo,
-                    1.0,
+                transformation_events.append(
+                    lerp.TransformationEvent(
+                        chart_select_arrow,
+                        copy(chart_select_arrow),
+                        entity.Container(
+                            pos = (SCREEN_WIDTH // 2 - 40, SCREEN_HEIGHT // 2),
+                            transformation = (1, 1, 0),
+                            entities = chart_select_arrow.entities
+                        ),
+                        pytweening.easeOutExpo,
+                        0.5,
+                    )
                 )
-            )
+                current_chart_info.visible = True
+                transformation_events.append(
+                    lerp.TransformationEvent(
+                        current_chart_info,
+                        copy(current_chart_info),
+                        entity.Container(
+                            pos = (0, 0),
+                            transformation = (1, 1, 0),
+                            entities = current_chart_info.entities
+                        ),
+                        pytweening.easeOutExpo,
+                        1.0,
+                    )
+                )
+            else:
+                version_prev_arrow.visible = False
+                version_next_arrow.visible = False
+                chart_prev_arrow.visible   = current_chart_index > 0
+                chart_next_arrow.visible   = current_chart_index < charts_count - 1
+
+                transformation_events.append(
+                    lerp.TransformationEvent(
+                        select_arrow_image,
+                        copy(select_arrow_image),
+                        entity.Image((0, 0), (0.6, 0.6, 90), arrow_png, True),
+                        pytweening.easeOutBack,
+                        0.35,
+                    )
+                )
+                transformation_events.append(
+                    lerp.TransformationEvent(
+                        chart_select_arrow,
+                        copy(chart_select_arrow),
+                        entity.Container(
+                            pos = (SCREEN_WIDTH - 512 - 256, SCREEN_HEIGHT // 2),
+                            transformation = (1, 1, 0),
+                            entities = chart_select_arrow.entities
+                        ),
+                        pytweening.easeOutExpo,
+                        0.5,
+                    )
+                )
+                transformation_events.append(
+                    lerp.TransformationEvent(
+                        current_chart_info,
+                        copy(current_chart_info),
+                        entity.Container(
+                            pos = (0, 1080),
+                            transformation = (1, 1, 0),
+                            entities = current_chart_info.entities
+                        ),
+                        pytweening.easeOutExpo,
+                        0.6,
+                    )
+                )
+        # ========================================================================================================
+
         elif button_clicks[button_id.VERSION_PREV]:
             version_dec()
             version_prev_arrow.visible = current_version_index > 0
@@ -281,6 +395,7 @@ def chartSelection(screen, context):
             version_next_arrow.visible = current_version_index < versions_count - 1
             version_text.content = get_current_version_text()
         elif button_clicks[button_id.CHART_PLAY]:
+            chart_select_arrow.visible = False
             version_prev_arrow.visible = False
             version_next_arrow.visible = False
             transformation_events.append(
@@ -335,6 +450,10 @@ def chartSelection(screen, context):
             next_scene = scenes.gameplay
             pygame.time.set_timer(custom_event.QUIT_SCENE, 800, 1)
 
+        smooth_step = min(1.0, delta_time_s * 14.0)
+        for drawer_box, (tx, ty) in zip(drawer_containers, drawer_target_positions):
+            cx, cy = drawer_box.pos
+            drawer_box.pos = (cx + (tx - cx) * smooth_step, cy + (ty - cy) * smooth_step)
 
         lerp.processTransformationEvents(transformation_events, delta_time_s)
         drawEntities(screen, entities, (-camera_pos.x, -camera_pos.y))

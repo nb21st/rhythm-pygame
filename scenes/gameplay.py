@@ -1,16 +1,20 @@
-import pygame
-import math
-import zipfile
 from copy              import copy
 from dataclasses       import dataclass
 from enum              import IntEnum, auto
+import math
+import zipfile
+
+import pygame
 from mutagen.mp3       import MP3
 from mutagen.oggvorbis import OggVorbis
+import pytweening
+
 from utils             import *
 from draw              import drawEntities
 import scenes.scenes as scenes
 import oszloader       as osu
 import entity
+import lerp
 import data_io
 
 @dataclass
@@ -46,20 +50,21 @@ class KeyState(IntEnum):
 KEY_STATE_TABLE = [[KeyState.JUST_RELEASED, KeyState.JUST_RELEASED, KeyState.RELEASED,     KeyState.RELEASED    ],
                    [KeyState.PRESSED,       KeyState.PRESSED,       KeyState.JUST_PRESSED, KeyState.JUST_PRESSED]]
 
-JUDGEMENT_COLORS  = [ pygame.Color("lime")
-                    , pygame.Color("green")
-                    , pygame.Color("dodgerblue")
-                    , pygame.Color("orange")
-                    , pygame.Color("red")
-                    , pygame.Color("purple")
-                    , pygame.Color("white")
-                    ]
+JUDGEMENT_COLORS      = [ pygame.Color("lime")
+                        , pygame.Color("green")
+                        , pygame.Color("dodgerblue")
+                        , pygame.Color("orange")
+                        , pygame.Color("red")
+                        , pygame.Color("purple")
+                        , pygame.Color("white")
+                        ]
 
-HIT_OBJECT_COLORS = [ pygame.Color("tomato")
-                    , pygame.Color("gold")
-                    , pygame.Color("springgreen")
-                    , pygame.Color("deepskyblue")
-                    ]
+HIT_OBJECT_COLORS     = [ pygame.Color("tomato")
+                        , pygame.Color("gold")
+                        , pygame.Color("springgreen")
+                        , pygame.Color("deepskyblue")
+                        ]
+HIT_OBJECT_COLORS_ALT = [pygame.Color.from_hsla(h, s * 0.5, l * 0.5, a) for h, s, l, a in map(lambda x: x.hsla , HIT_OBJECT_COLORS)]
 
 HIT_LIGHTING_COLORS = JUDGEMENT_COLORS + HIT_OBJECT_COLORS
 
@@ -84,7 +89,7 @@ def gameplay(screen, context):
     clock         = pygame.time.Clock()
     counting_down = False
     time          = 0.0
-    dt            = 0.0
+    delta_time_s  = 0.0
 
     rewinding     = False
 
@@ -185,12 +190,45 @@ def gameplay(screen, context):
         transformation = (1, 1, 0),
         image = pygame.image.load("assets/background.png").convert(),
     )
+    transition = entity.Circle((SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2), 1100, (0, 0, 0))
+    game = entity.Image(
+        pos = (0, 0),
+        transformation = (1, 1, 0),
+        image = None,
+    )
 
     entities: List[entity.Entity] = [
         background,
+        game,
+        transition,
+    ]
+
+    transformation_events: List[lerp.TransformationEvent] = [
+        lerp.TransformationEvent(
+            transition,
+            copy(transition),
+            entity.Circle((SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2), 0, (0, 0, 0)),
+            pytweening.easeInExpo,
+            0.8,
+        ),
     ]
 
     while running:
+        for event in pygame.event.get():
+            match event.type:
+                case pygame.QUIT:
+                    import sys
+                    pygame.quit()
+                    sys.exit(0)
+                case custom_event.QUIT_SCENE:
+                    running = False
+                case pygame.KEYDOWN:
+                    match event.key:
+                        case pygame.K_SPACE:
+                            auto = not auto
+                        case pygame.K_F1:
+                            debug_state.level = (debug_state.level + 1) % debug_state.count
+
         if counting_down and time >= 0.0:
             pygame.mixer.music.play()
             music_time_base = 0.0
@@ -209,20 +247,6 @@ def gameplay(screen, context):
             pygame.time.set_timer(custom_event.QUIT_SCENE, 3000, 1)
             game_end = True
 
-        for event in pygame.event.get():
-            match event.type:
-                case pygame.KEYDOWN:
-                    match event.key:
-                        case pygame.K_SPACE:
-                            auto = not auto
-
-                case pygame.QUIT:
-                    import sys
-                    pygame.quit()
-                    sys.exit(0)
-                case custom_event.QUIT_SCENE:
-                    running = False
-
         keyboard_inputs = pygame.key.get_pressed()
 
         # @Note: Time Machine
@@ -230,7 +254,7 @@ def gameplay(screen, context):
             if not rewinding:
                 pygame.mixer.music.set_volume(0.0)
                 rewinding = True
-            offset = (keyboard_inputs[pygame.K_RIGHT] - keyboard_inputs[pygame.K_LEFT]) * 2.0 * dt * (1 + keyboard_inputs[pygame.K_LSHIFT] * 3)
+            offset = (keyboard_inputs[pygame.K_RIGHT] - keyboard_inputs[pygame.K_LEFT]) * 2.0 * delta_time_s * (1 + keyboard_inputs[pygame.K_LSHIFT] * 3)
             time += offset
 
         elif rewinding:
@@ -318,7 +342,7 @@ def gameplay(screen, context):
                 hit_object_deletes.append(hit_object)
             elif (time + 0.1 >= hit_object.timestamp and hit_object.end_time > 0 and
                   (keys_state[hit_object.key] == KeyState.JUST_PRESSED or keys_state[hit_object.key] == KeyState.PRESSED)):
-                hit_lightings[key] = HitLighting(Judgement.NONE + 1 + hit_object.key, 1.0)
+                hit_lightings[hit_object.key] = HitLighting(Judgement.NONE + 1 + hit_object.key, 1.0)
 
                 continue
             elif hit_object.timestamp - time > MEH_TIMING:
@@ -341,7 +365,7 @@ def gameplay(screen, context):
             bonus_score += (MAX_SCORE * mod_multiplier * 0.5 / total_notes) * (hit_bonus_values[grade] * math.sqrt(bonus) / 320)
             score        = base_score + bonus_score
 
-            health += [4, 2, 1, 0, -2, -10, 0][grade]
+            health += [4, 2, 1, 0, -10, -20, 0][grade]
             health = cramp(health, 0, 100)
             accuracy_n  += accuracy_values[grade]
             accuracy_d  += 300
@@ -356,7 +380,7 @@ def gameplay(screen, context):
 
         # @Section: Draw
 
-        drawEntities(screen, entities, (-camera_pos.x, -camera_pos.y))
+        game.image = pygame.Surface(SCREEN_SIZE, pygame.SRCALPHA)
 
         # @Note: This seems inflexible
         sawtooth_color_light   = pygame.Color((255, 255, 255))
@@ -365,19 +389,18 @@ def gameplay(screen, context):
         sawtooth_color_dark.a  = int(sawtooth_visual_wave * 30)
         sawtooth_color_light   = sawtooth_color_light.premul_alpha()
         sawtooth_color_dark    = sawtooth_color_dark.premul_alpha()
+        sawtooth_color_light.a = 255
+        sawtooth_color_dark.a  = 255
 
-        track_bg = pygame.Surface(SCREEN_SIZE, pygame.SRCALPHA)
         pygame.draw.rect(
-            track_bg,
-            pygame.Color((0, 0, 0)),
+            game.image,
+            pygame.Color((0, 0, 0, 200)),
             (track_pos_x - (80 + 96), 0, (80 + 96) * 2, SCREEN_HEIGHT)
         )
-        track_bg.set_alpha(200)
-        screen.blit(track_bg)
 
         for column_track_i in range(4):
             pygame.draw.rect(
-                screen,
+                game.image,
                 pygame.Color((0, 0, 0)),
                 (track_pos_x + (column_track_i - 1.5) * COLUMN_GAP - 32, 0, 64, HITBAR_Y),
             )
@@ -386,11 +409,11 @@ def gameplay(screen, context):
         for i in range(3):
             three = 1
             line_pos_y = ((HITBAR_Y - (HITBAR_Y / three) * i) + (time / 2 * bps) * (HITBAR_Y / three)) % HITBAR_Y
-            pygame.draw.line(screen, pygame.Color("gray20"), (track_pos_x - (80 + 96), line_pos_y), (track_pos_x + (80 + 96), line_pos_y), 2)
+            pygame.draw.line(game.image, pygame.Color("gray20"), (track_pos_x - (80 + 96), line_pos_y), (track_pos_x + (80 + 96), line_pos_y), 2)
 
         for key, hit_lighting in filter(lambda xs: xs[1] is None, enumerate(hit_lightings)):
             pygame.draw.circle(
-                screen,
+                game.image,
                 pygame.Color("black"),
                 (track_pos_x + (key - 1.5) * COLUMN_GAP, HITBAR_Y),
                 32,
@@ -405,9 +428,7 @@ def gameplay(screen, context):
                 break
 
             primary_color     = HIT_OBJECT_COLORS[hit_object.key]
-            secondary_color   = primary_color
-            secondary_color.a = 85
-            secondary_color   = secondary_color.premul_alpha()
+            secondary_color   = HIT_OBJECT_COLORS_ALT[hit_object.key]
 
             is_long_note = hit_object.end_time > 0.0
 
@@ -417,14 +438,14 @@ def gameplay(screen, context):
                           else hit_object.end_time * SPEED
 
                 pygame.draw.rect(
-                    screen,
+                    game.image,
                     secondary_color,
                     (track_pos_x + (hit_object.key - 1.5) * COLUMN_GAP - size, end_pos,
                      size * 2, height)
                 )
 
             pygame.draw.circle(
-                screen,
+                game.image,
                 primary_color,
                 (track_pos_x + (hit_object.key - 1.5) * COLUMN_GAP, pos - int(hit_object.end_time * SPEED)),
                 size,
@@ -434,37 +455,36 @@ def gameplay(screen, context):
                 continue
 
             pygame.draw.circle(
-                screen,
+                game.image,
                 primary_color,
                 (track_pos_x + (hit_object.key - 1.5) * COLUMN_GAP, pos),
                 size,
             )
 
         for key, hit_lighting in filter(lambda xs: xs[1] is not None, enumerate(hit_lightings)):
-            color = HIT_LIGHTING_COLORS[hit_lighting.grade]
-            color.a = int(255 * cramp(hit_lighting.lifetime, 0, 1))
-            color = color.premul_alpha()
+            h, s, v, a = HIT_LIGHTING_COLORS[hit_lighting.grade].hsva
+            color = pygame.Color.from_hsva(h, s, v * hit_lighting.lifetime, a)
 
             pygame.draw.circle(
-                screen,
+                game.image,
                 color,
                 (track_pos_x + (key - 1.5) * COLUMN_GAP, HITBAR_Y),
                 32,
             )
-            hit_lighting.lifetime -= dt * 3 * (1 + 2 * (hit_lighting.grade == Judgement.NONE))
+            hit_lighting.lifetime -= delta_time_s * 3 * (1 + 2 * (hit_lighting.grade == Judgement.NONE))
             if hit_lighting.lifetime <= 0.0:
                 hit_lightings[key] = None
 
         for key_guide_x in [0, 1, 2, 3]:
             pygame.draw.circle(
-                screen,
+                game.image,
                 sawtooth_color_light,
                 (track_pos_x + (key_guide_x - 1.5) * COLUMN_GAP, HITBAR_Y),
                 8,
             )
 
         if judgement_feedback is not None:
-            judgement_feedback.lifetime -= dt * 3 * (1 + 2 * (judgement_feedback.grade == Judgement.NONE))
+            judgement_feedback.lifetime -= delta_time_s * 3 * (1 + 2 * (judgement_feedback.grade == Judgement.NONE))
 
             if judgement_feedback.lifetime <= 0.0:
                 judgement_feedback = None
@@ -487,11 +507,12 @@ def gameplay(screen, context):
                 combo_feedback_surface = combo_outline_surface
                 big_font.outline = 0
     
-                screen.blit(feedback_surface, feedback_surface_rect)
-                screen.blit(combo_feedback_surface, combo_feedback_surface_rect)
+                game.image.blit(feedback_surface, feedback_surface_rect)
+                game.image.blit(combo_feedback_surface, combo_feedback_surface_rect)
 
 
-        pygame.draw.line(screen, "red", (track_pos_x + 220, SCREEN_HEIGHT // 2 + 400), (track_pos_x + 220, SCREEN_HEIGHT // 2 + 400 * ((100 - health) / 100)), 32)
+        pygame.draw.line(game.image, (0, 0, 0),   (track_pos_x + 220, SCREEN_HEIGHT // 2 + 400), (track_pos_x + 220, SCREEN_HEIGHT // 2), 32)
+        pygame.draw.line(game.image, (255, 0, 0), (track_pos_x + 220, SCREEN_HEIGHT // 2 + 398), (track_pos_x + 220, SCREEN_HEIGHT // 2 + 2 + 400 * ((100 - health) / 100)), 28)
 
         cramped_time  = cramp(time, 0, song_length)
         cramped_time_minutes = math.trunc(cramped_time / 60)
@@ -506,13 +527,15 @@ def gameplay(screen, context):
             True,
             pygame.Color("white"),
         )
-        screen.blit(score_text,    (track_pos_x + 200, SCREEN_HEIGHT - 128 + 00))
-        screen.blit(combo_text,    (track_pos_x + 200, SCREEN_HEIGHT - 128 + 48))
-        screen.blit(accuracy_text, (track_pos_x + 200, SCREEN_HEIGHT - 128 + 96))
-        screen.blit(time_text,     (8, SCREEN_HEIGHT - 32))
-        if auto: screen.blit(auto_text, (SCREEN_WIDTH - 134, SCREEN_HEIGHT - 48))
-        pygame.draw.rect(screen, pygame.Color("yellow"), (0, SCREEN_HEIGHT - 4, int(SCREEN_WIDTH * (time / song_length)), 4))
+        game.image.blit(score_text,    (track_pos_x + 200, SCREEN_HEIGHT - 128 + 00))
+        game.image.blit(combo_text,    (track_pos_x + 200, SCREEN_HEIGHT - 128 + 48))
+        game.image.blit(accuracy_text, (track_pos_x + 200, SCREEN_HEIGHT - 128 + 96))
+        game.image.blit(time_text,     (8, SCREEN_HEIGHT - 32))
+        if auto: game.image.blit(auto_text, (SCREEN_WIDTH - 134, SCREEN_HEIGHT - 48))
+        pygame.draw.rect(game.image, pygame.Color("yellow"), (0, SCREEN_HEIGHT - 4, int(SCREEN_WIDTH * (time / song_length)), 4))
 
+        lerp.processTransformationEvents(transformation_events, delta_time_s)
+        drawEntities(screen, entities, (-camera_pos.x, -camera_pos.y))
 
         if debug_state.level >= 1:
             quick_debug_info = {}
@@ -520,23 +543,20 @@ def gameplay(screen, context):
         if debug_state.level >= 2:
             quick_debug_info.update({
                 "camera pos": (f"({camera_pos.x:.2f}, {camera_pos.y:.2f})"),
-                "mouse pos": mouse_pos,
-                "waiting for key id": waiting_for_key_id
             })
         if debug_state.level >= 3:
             bulk_debug_info.update({
                 "entities": entities_text,
-                "keybinds": keybinds,
             })
         if debug_state.level >= 1:
-            drawDebugInfo(screen,clock.get_fps(), quick_debug_info,bulk_debug_info)
+            drawDebugInfo(screen, clock.get_fps(), quick_debug_info,bulk_debug_info)
 
         pygame.display.flip()
 
-        dt = clock.tick(GAMEPLAY_FPS_LIMIT) / 1000
+        delta_time_s = clock.tick(GAMEPLAY_FPS_LIMIT) / 1000
         if pygame.mixer.music.get_busy() and not rewinding:
             time = music_time_base + (pygame.mixer.music.get_pos() - music_pos_base) / 1000
         else:
-            time += dt
+            time += delta_time_s
 
     return next_scene, context
