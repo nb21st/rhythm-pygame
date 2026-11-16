@@ -93,7 +93,7 @@ def judgeTiming(diff: float) -> Judgement:
     elif diff < OK_TIMING:      return Judgement.OK
     else:                       return Judgement.MEH
 
-def gameplay(screen, context):
+def run(screen, context):
     next_scene = scenes.chartSelection
     beatmapset_filename, beatmap_filename, beatmap_id = context
 
@@ -285,9 +285,8 @@ def gameplay(screen, context):
     ]
 
     transformation_events: List[lerp.TransformationEvent] = [
-        lerp.TransformationEvent(
+        lerp.TransformationEvent.fromCurrent(
             transition,
-            copy(transition),
             entity.Circle((SCREEN_WIDTH // 2, SCREEN_HEIGHT // 2), 0, (0, 0, 0)),
             pytweening.easeInExpo,
             0.8,
@@ -314,6 +313,7 @@ def gameplay(screen, context):
                     sys.exit(0)
                 case custom_event.QUIT_SCENE:
                     pygame.mouse.set_visible(True)
+                    pygame.mixer.music.stop()
                     running = False
                 case pygame.KEYDOWN:
                     match event.key:
@@ -339,11 +339,9 @@ def gameplay(screen, context):
         song_end = time >= song_length and song_length > 0.0
         if not game_end:
             if health <= 0:
-                pygame.mixer.music.stop()
                 transformation_events.append(
-                    lerp.TransformationEvent(
+                    lerp.TransformationEvent.fromCurrent(
                         transition,
-                        copy(transition),
                         entity.Circle(transition.pos, 1100, DARK_BACKGROUND_COLOR),
                         pytweening.easeInExpo,
                         0.5,
@@ -353,12 +351,10 @@ def gameplay(screen, context):
                 game_end = True
             elif song_end:
                 # Write beatmap_id and score to files
-                pygame.mixer.music.stop()
                 data_io.write_data("data/score.txt", {beatmap_id:round(score)})
                 transformation_events.append(
-                    lerp.TransformationEvent(
+                    lerp.TransformationEvent.fromCurrent(
                         transition,
-                        copy(transition),
                         entity.Circle(transition.pos, 1100, DARK_BACKGROUND_COLOR),
                         pytweening.easeInExpo,
                         2.0,

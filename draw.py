@@ -1,5 +1,8 @@
 # @Intro:
 #     Immediate-mode drawing of entities.
+#     Each entity class now knows how to draw itself (see Entity.draw in entity.py).
+#     This file keeps the shared helpers (transform cache, text cache, culling)
+#     and the two entry points drawEntities / drawEntity that the scenes call.
 #
 # @Note on performance:
 #     Surface transformations (scale/rotate) and text rendering are the expensive
@@ -19,10 +22,14 @@
 #     Change detection happens here, at draw time, so it doesn't matter who
 #     modified the entity (lerp, gameplay code, ...). No call site has to know.
 
+from __future__ import annotations
 from functools import lru_cache
-from pygame import Vector2, Surface, draw, transform, SCROLL_REPEAT
+from typing import TYPE_CHECKING
+from pygame import Vector2, Surface, transform, SCROLL_REPEAT
 from utils import *
-import entity
+
+if TYPE_CHECKING:  # entity.py imports this module, so only import entity for type hints
+    import entity
 
 # Optional quantization: while something is mid-lerp its transformation changes
 # every frame, which defeats the cache. Setting a step (e.g. SCALE_STEP = 0.01,
@@ -127,104 +134,5 @@ def drawEntities(screen: Surface, entities: list[entity.Entity], pos_offset=(0, 
         drawEntity(screen, e, pos_offset, transformation_offset)
 
 def drawEntity(screen: Surface, e: entity.Entity, pos_offset=(0, 0), transformation_offset=IDENTITY_OFFSET):
-    osx, osy, oangle = transformation_offset
-    def calcPos(pos): return toParentSpace(pos, pos_offset, transformation_offset)
-    match e:
-        case entity.BackgroundColor(color=col):
-            screen.fill(col)
-
-        case entity.Rect(pos=pos, size=size, color=col):
-            draw.rect(screen, col, (calcPos(pos), (size[0] * osx, size[1] * osy)))
-
-        case entity.Circle(pos=pos, radius=rad, color=col):
-            draw.circle(screen, col, calcPos(pos), rad * (abs(osx) + abs(osy)) / 2)
-
-        case entity.Text(pos=pos, font=f, content=text, color=col, outline_color=o_col, outline_width=o_w, center=center):
-            if _isUnitScale(osx) and _isUnitScale(osy):
-                text_surface = _renderText(f, text, tuple(col), tuple(o_col), o_w)
-            else:
-                text_surface = _scaledText(f, text, tuple(col), tuple(o_col), o_w,
-                                           _quant(osx, SCALE_STEP), _quant(osy, SCALE_STEP))
-
-            angle = -oangle
-            if not _isZeroAngle(angle):
-                text_surface = transform.rotate(text_surface, angle)
-
-            if center:
-                text_rect = text_surface.get_rect(center=calcPos(pos))
-                screen.blit(text_surface, text_rect)
-            else:
-                screen.blit(text_surface, calcPos(pos))
-
-        case entity.Image(pos=pos, transformation=transformation, image=surface, center=center, scroll_rate=scroll, visible=visible, scale=extra):
-            if not visible:
-                return
-
-            key = _transformKey(transformation[0] * osx * extra, transformation[1] * osy * extra,
-                                transformation[2] - oangle)
-            draw_pos = calcPos(pos)
-            if _offscreen(screen, draw_pos, surface.get_size(), key):
-                return
-
-            c = e._cache
-            scaled = _scaledImage(c, surface, key)
-
-            if scroll[0] == 0 and scroll[1] == 0:
-                out = _rotatedImage(c, scaled, key)
-                if center:
-                    draw_pos = tupleSub(draw_pos, tupleIDiv(out.get_size(), (2, 2)))
-                screen.blit(out, draw_pos)
-                return
-
-            # @Bug, Todo: Where is delta time bro. (scroll is still "per frame")
-            # Scroll is accumulated in source pixels; the source is never modified.
-            w, h = scaled.get_size()
-            if w == 0 or h == 0:
-                return
-            c.scroll_x = (c.scroll_x + scroll[0]) % surface.get_width()
-            c.scroll_y = (c.scroll_y + scroll[1]) % surface.get_height()
-            ox = round(c.scroll_x * key[0]) % w
-            oy = round(c.scroll_y * key[1]) % h
-
-            if _isZeroAngle(key[2]):
-                if center:
-                    draw_pos = tupleSub(draw_pos, tupleIDiv((w, h), (2, 2)))
-                _blitWrapped(screen, scaled, draw_pos, ox, oy)
-            else:
-                # Rare: scrolling *and* rotated. Scroll a copy, then rotate it.
-                tmp = scaled.copy()
-                tmp.scroll(ox, oy, SCROLL_REPEAT)
-                out = transform.rotate(tmp, key[2])
-                if center:
-                    draw_pos = tupleSub(draw_pos, tupleIDiv(out.get_size(), (2, 2)))
-                screen.blit(out, draw_pos)
-
-        # @Note: Debatable if this animation iteration logic should be put somewhere else.
-        case entity.Animation(pos=pos, transformation=transformation, animation=animation, delay_ms=delay_ms, center=center, clock=clock, frame_index=i, excess_ms=ms_left, visible=visible):
-            if not visible:
-                return
-
-            ms_left += clock.tick()
-
-            while ms_left >= delay_ms:
-                ms_left -= delay_ms
-                i = (i + 1) % len(animation)
-
-            e.frame_index = i
-            e.excess_ms = ms_left
-
-            # @Bug?: unlike Image, this ignores transformation_offset[2]. Kept as-is.
-            key = _transformKey(transformation[0] * osx, transformation[1] * osy, transformation[2])
-            draw_pos = calcPos(pos)
-            if _offscreen(screen, draw_pos, animation[i].get_size(), key):
-                return
-
-            surface = _animationFrame(e, animation, i, key)
-
-            if center:
-                draw_pos = tupleSub(draw_pos, tupleIDiv(surface.get_size(), (2, 2)))
-            screen.blit(surface, draw_pos)
-
-        case entity.Container(pos=pos, transformation=transformation, entities=es, visible=visible):
-            if visible:
-                drawEntities(screen, es, calcPos(pos), composeTransformation(transformation_offset, transformation))
+    # @Note: Was a big match/case on the entity type. Now each entity draws itself.
+    e.draw(screen, pos_offset, transformation_offset)

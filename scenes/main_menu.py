@@ -12,7 +12,7 @@ import lerp
 import scenes.scenes as scenes
 from utils import *
 
-def mainMenu(screen, context):
+def run(screen, context):
     next_scene = None
 
     clock = pygame.time.Clock()
@@ -118,16 +118,14 @@ def mainMenu(screen, context):
     entities_text += "]"
 
     transformation_events: List[lerp.TransformationEvent] = [
-        lerp.TransformationEvent(
+        lerp.TransformationEvent.fromCurrent(
             camera_pos,
-            copy(camera_pos),
             entity.Position2(0, 0),
             pytweening.easeOutCirc,
             1.2,
         ),
-        lerp.TransformationEvent(
+        lerp.TransformationEvent.fromCurrent(
             main_menu_animation_guy,
-            copy(main_menu_animation_guy),
             entity.Animation(
                 pos = (180, 300),
                 transformation = main_menu_animation_guy.transformation,
@@ -137,9 +135,8 @@ def mainMenu(screen, context):
             pytweening.easeOutCirc,
             1.2,
         ),
-        lerp.TransformationEvent(
+        lerp.TransformationEvent.fromCurrent(
             inner_background,
-            copy(inner_background),
             entity.Image(
                 (16, 16),
                 ((SCREEN_WIDTH - 32) / SCREEN_WIDTH, (SCREEN_HEIGHT - 32) / SCREEN_HEIGHT, 0),
@@ -147,9 +144,8 @@ def mainMenu(screen, context):
             pytweening.easeInOutCirc,
             0.8,
         ),
-        lerp.TransformationEvent(
+        lerp.TransformationEvent.fromCurrent(
             main_menu_selection,
-            copy(main_menu_selection),
             entity.Container(
                 pos = (SCREEN_WIDTH, SCREEN_HEIGHT - 128),
                 transformation = (1, 1, main_menu_selection_target_rotation),
@@ -187,9 +183,8 @@ def mainMenu(screen, context):
         if button_clicks[button_id.MAIN_MENU_NEXT]:
            main_menu_selection_target_rotation += 120
            transformation_events.append(
-              lerp.TransformationEvent(
+              lerp.TransformationEvent.fromCurrent(
                  main_menu_selection,
-                 copy(main_menu_selection),
                  entity.Container(
                     pos = main_menu_selection.pos,
                     transformation = (1, 1, main_menu_selection_target_rotation),
@@ -202,9 +197,8 @@ def mainMenu(screen, context):
         elif button_clicks[button_id.MAIN_MENU_PREV]:
            main_menu_selection_target_rotation -= 120
            transformation_events.append(
-              lerp.TransformationEvent(
+              lerp.TransformationEvent.fromCurrent(
                  main_menu_selection,
-                 copy(main_menu_selection),
                  entity.Container(
                     pos = main_menu_selection.pos,
                     transformation = (1, 1, main_menu_selection_target_rotation),
@@ -217,9 +211,8 @@ def mainMenu(screen, context):
         else:
             if button_clicks[button_id.MAIN_MENU_PLAY]:
                 transformation_events.append(
-                    lerp.TransformationEvent(
+                    lerp.TransformationEvent.fromCurrent(
                         camera_pos,
-                        copy(camera_pos),
                         entity.Position2(0, -1080 * 10),
                         pytweening.easeInOutCirc,
                         1.0,
@@ -232,9 +225,8 @@ def mainMenu(screen, context):
                 pygame.event.post(pygame.event.Event(custom_event.QUIT_SCENE))
             elif button_clicks[button_id.MAIN_MENU_EXIT]:
                 transformation_events.append(
-                    lerp.TransformationEvent(
+                    lerp.TransformationEvent.fromCurrent(
                         transition,
-                        copy(transition),
                         entity.Circle(
                             pos = transition.pos,
                             radius = 1200,

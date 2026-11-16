@@ -14,7 +14,7 @@ import lerp
 import oszloader
 import data_io
 
-def chartSelection(screen, context):
+def run(screen, context):
     next_scene = None
     context    = None
 
@@ -238,9 +238,8 @@ def chartSelection(screen, context):
     entities_text += "]"
 
     transformation_events: List[lerp.TransformationEvent] = [
-        lerp.TransformationEvent(
+        lerp.TransformationEvent.fromCurrent(
             camera_pos,
-            copy(camera_pos),
             entity.Position2(0, 0),
             pytweening.easeOutCirc,
             0.6,
@@ -273,9 +272,8 @@ def chartSelection(screen, context):
 
         if button_clicks[button_id.CHART_BACK]:
             transformation_events.append(
-                lerp.TransformationEvent(
+                lerp.TransformationEvent.fromCurrent(
                     camera_pos,
-                    copy(camera_pos),
                     entity.Position2(-1080 * 10, 0),
                     pytweening.easeInOutCirc,
                     1.0,
@@ -310,18 +308,16 @@ def chartSelection(screen, context):
                 version_next_arrow.visible = versions_count > 1
 
                 transformation_events.append(
-                    lerp.TransformationEvent(
+                    lerp.TransformationEvent.fromCurrent(
                         select_arrow_image,
-                        copy(select_arrow_image),
                         entity.Image((0, 0), (0.6, 0.6, -90), arrow_png, True),
                         pytweening.easeOutBack,
                         0.35,
                     )
                 )
                 transformation_events.append(
-                    lerp.TransformationEvent(
+                    lerp.TransformationEvent.fromCurrent(
                         chart_select_arrow,
-                        copy(chart_select_arrow),
                         entity.Container(
                             pos = (SCREEN_WIDTH // 2 - 40, SCREEN_HEIGHT // 2),
                             transformation = (1, 1, 0),
@@ -333,9 +329,8 @@ def chartSelection(screen, context):
                 )
                 current_chart_info.visible = True
                 transformation_events.append(
-                    lerp.TransformationEvent(
+                    lerp.TransformationEvent.fromCurrent(
                         current_chart_info,
-                        copy(current_chart_info),
                         entity.Container(
                             pos = (0, 0),
                             transformation = (1, 1, 0),
@@ -352,18 +347,16 @@ def chartSelection(screen, context):
                 chart_next_arrow.visible   = current_chart_index < charts_count - 1
 
                 transformation_events.append(
-                    lerp.TransformationEvent(
+                    lerp.TransformationEvent.fromCurrent(
                         select_arrow_image,
-                        copy(select_arrow_image),
                         entity.Image((0, 0), (0.6, 0.6, 90), arrow_png, True),
                         pytweening.easeOutBack,
                         0.35,
                     )
                 )
                 transformation_events.append(
-                    lerp.TransformationEvent(
+                    lerp.TransformationEvent.fromCurrent(
                         chart_select_arrow,
-                        copy(chart_select_arrow),
                         entity.Container(
                             pos = (SCREEN_WIDTH - 512 - 256, SCREEN_HEIGHT // 2),
                             transformation = (1, 1, 0),
@@ -374,9 +367,8 @@ def chartSelection(screen, context):
                     )
                 )
                 transformation_events.append(
-                    lerp.TransformationEvent(
+                    lerp.TransformationEvent.fromCurrent(
                         current_chart_info,
-                        copy(current_chart_info),
                         entity.Container(
                             pos = (0, 1080),
                             transformation = (1, 1, 0),
@@ -403,18 +395,16 @@ def chartSelection(screen, context):
             version_prev_arrow.visible = False
             version_next_arrow.visible = False
             transformation_events.append(
-                lerp.TransformationEvent(
+                lerp.TransformationEvent.fromCurrent(
                     inner_background,
-                    copy(inner_background),
                     entity.Image((0, 0), (1, 1, 0), inner_background.image),
                     pytweening.easeOutCirc,
                     0.5,
                 ),
             )
             transformation_events.append(
-                lerp.TransformationEvent(
+                lerp.TransformationEvent.fromCurrent(
                     current_chart_display,
-                    copy(current_chart_display),
                     entity.Container(
                         pos = (SCREEN_WIDTH + 512, SCREEN_HEIGHT // 2),
                         transformation = (1, 1, 0),
@@ -425,9 +415,8 @@ def chartSelection(screen, context):
                 )
             )
             transformation_events.append(
-                lerp.TransformationEvent(
+                lerp.TransformationEvent.fromCurrent(
                     current_chart_info,
-                    copy(current_chart_info),
                     entity.Container(
                         pos = (0, 1080),
                         transformation = (1, 1, 0),
@@ -438,9 +427,8 @@ def chartSelection(screen, context):
                 )
             )
             transformation_events.append(
-                lerp.TransformationEvent(
+                lerp.TransformationEvent.fromCurrent(
                     transition,
-                    copy(transition),
                     entity.Circle(
                         pos = transition.pos,
                         radius = 1100,

@@ -8,11 +8,12 @@ import pytweening
 import data_io
 from draw import drawEntities
 import entity
+from ui import ButtonFeedback
 import lerp
 import scenes.scenes as scenes
 from utils import *
 
-def setting(screen, context):
+def run(screen, context):
     next_scene = None
     small_font = pygame.font.Font(None, 96)
     topic_font = pygame.font.Font(None, 180) #หัวข้อ setting
@@ -95,6 +96,8 @@ def setting(screen, context):
         go_back
     ]
 
+    button_feedback = ButtonFeedback.fromEntities(entities)
+
     entities_text = "[\n"
     for e in entities:
         entities_text += "    " + type(e).__name__ + ",\n"
@@ -150,14 +153,14 @@ def setting(screen, context):
             mouse_pos,
             (-camera_pos.x, -camera_pos.y))
         pygame.mouse.set_cursor(pygame.SYSTEM_CURSOR_HAND if any(button_hovers) else pygame.SYSTEM_CURSOR_ARROW)
+        button_feedback.update(button_clicks, button_hovers, delta_time_s)
 
         if button_clicks[button_id.CHART_SELECTION_BACK]:
             next_scene = scenes.mainMenu
             pygame.time.set_timer(custom_event.QUIT_SCENE, 300, 1)
             transformation_events.append(
-                lerp.TransformationEvent(
+                lerp.TransformationEvent.fromCurrent(
                     camera_pos,
-                    copy(camera_pos),
                     entity.Position2(0, 1080),
                     pytweening.easeInCirc,
                     0.3,
