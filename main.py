@@ -17,7 +17,7 @@ from utils import *
 
 def main():
     pygame.init()
-    screen     = pygame.display.set_mode((0, 0), pygame.FULLSCREEN, vsync=True)
+    screen     = pygame.display.set_mode(SCREEN_SIZE, pygame.FULLSCREEN | pygame.SCALED)
     next_scene = scenes.mainMenu
     context    = None
 
