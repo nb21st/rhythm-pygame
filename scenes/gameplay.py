@@ -169,7 +169,7 @@ def run(screen, context):
     for hitsound, volume in zip(hitsounds, [0.05, 0.1, 0.1, 0.1, 0.05]):
         hitsound.set_volume(volume)
 
-    music_volume_raw = 0.2
+    music_volume_raw = 0.5
     pygame.mixer.music.set_volume(music_volume_raw)
 
 
